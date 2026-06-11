@@ -8,7 +8,7 @@ The project follows the client-server assignment option with a React/Vite fronte
 
 - User signup and login with JWT authentication.
 - Password hashing with bcrypt.
-- AI website generation through a backend provider registry with automatic fallback on quota errors.
+- AI website generation through a backend provider registry with automatic fallback on quota or provider availability errors.
 - User-facing AI model selection without exposing provider URLs or keys.
 - Project CRUD with owner-based access control.
 - Project search, sort, and type filtering.
@@ -24,7 +24,7 @@ The project follows the client-server assignment option with a React/Vite fronte
 - Frontend: React, Vite, React Router, React-Bootstrap, Bootstrap, Axios.
 - Backend: Node.js, Express, mysql2, bcrypt, jsonwebtoken, cors, dotenv, express-validator, express-rate-limit.
 - Database: MySQL 8+.
-- AI API: OpenAI-compatible API such as Gemini or Groq.
+- AI API: OpenAI-compatible APIs such as Gemini, Groq, Mistral, or Cerebras.
 - Tests: Jest and Supertest.
 
 ## Project Structure
@@ -60,7 +60,7 @@ frontend/
 - Node.js 20 or newer.
 - npm.
 - A MySQL 8+ database. The production recommendation is Aiven MySQL.
-- A Gemini API key and optionally a Groq API key.
+- A Gemini API key, plus optional Groq, Mistral, and Cerebras API keys for additional providers.
 
 ## Environment Variables
 
@@ -86,12 +86,14 @@ JWT_SECRET=change_me
 AI_API_KEY=
 GEMINI_API_KEY=
 GROQ_API_KEY=
+MISTRAL_API_KEY=
+CEREBRAS_API_KEY=
 CORS_ORIGIN=http://localhost:5173
 ```
 
 Use `DB_SSL_REJECT_UNAUTHORIZED=false` locally with Aiven if Node reports a self-signed certificate chain. For stricter production setups, configure the provider CA certificate and use `true`.
 
-`AI_API_KEY` is kept as a legacy local fallback for Gemini. New deployments should use `GEMINI_API_KEY`. `GROQ_API_KEY` enables the Groq fallback provider.
+`AI_API_KEY` is kept as a legacy local fallback for Gemini. New deployments should use `GEMINI_API_KEY`. `GROQ_API_KEY`, `MISTRAL_API_KEY`, and `CEREBRAS_API_KEY` enable the additional fallback providers.
 
 Frontend example:
 
@@ -232,7 +234,7 @@ The test suite covers:
 - Admin routes return data for admin users.
 - Model routes return public model labels only.
 - Usage routes return every registered model, including zero-usage models.
-- AI generation falls back to the next provider when a provider returns `429`.
+- AI generation falls back to the next provider when a provider returns quota, invalid-key, unavailable-model, or temporary server errors.
 
 ## Build
 
@@ -280,6 +282,8 @@ Required environment variables:
 - `JWT_SECRET`
 - `GEMINI_API_KEY`
 - `GROQ_API_KEY`
+- `MISTRAL_API_KEY`
+- `CEREBRAS_API_KEY`
 - `CORS_ORIGIN`
 
 Set `CORS_ORIGIN` to the deployed Vercel frontend URL.
@@ -325,6 +329,7 @@ Secrets are not stored in the repository. Production secrets must be configured 
 - The frontend previews generated HTML only inside a sandboxed iframe.
 - The frontend sends only model IDs such as `gemini-flash`, never provider URLs or API keys.
 - `/api/models` returns only public IDs and labels.
+- `/api/usage` returns only model IDs, labels, estimated usage, and estimated limits.
 - Sensitive routes are protected by JWT and admin routes require `role = admin`.
 - Auth and generation routes are rate-limited.
 

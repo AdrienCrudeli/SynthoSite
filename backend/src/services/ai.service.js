@@ -43,6 +43,22 @@ function getGenerationOrder(requestedModelId) {
   ];
 }
 
+function isFallbackEligibleError(error) {
+  const status = error.status || error.statusCode;
+
+  return (
+    status === 429 ||
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    error.code === 'MISSING_AI_PROVIDER_KEY'
+  );
+}
+
 async function tryProvider(providerId, userPrompt, styleOptions) {
   const provider = AI_PROVIDERS[providerId];
 
@@ -83,6 +99,7 @@ async function generateSite(userPrompt, styleOptions = {}, requestedModelId = FA
   const order = getGenerationOrder(requestedModelId);
   let sawQuotaError = false;
   let sawMissingKey = false;
+  let sawUnavailableProvider = false;
 
   for (const providerId of order) {
     try {
@@ -102,6 +119,11 @@ async function generateSite(userPrompt, styleOptions = {}, requestedModelId = FA
         continue;
       }
 
+      if (isFallbackEligibleError(error)) {
+        sawUnavailableProvider = true;
+        continue;
+      }
+
       if (error instanceof AppError) {
         throw error;
       }
@@ -118,11 +140,16 @@ async function generateSite(userPrompt, styleOptions = {}, requestedModelId = FA
     throw new AppError('No configured AI provider key is available on the server.', 500);
   }
 
+  if (sawUnavailableProvider) {
+    throw new AppError('No AI provider is currently available. Please try again later.', 502);
+  }
+
   throw new AppError('No AI provider is available.', 500);
 }
 
 module.exports = {
   generateSite,
   cleanGeneratedHtml,
-  buildUserPrompt
+  buildUserPrompt,
+  isFallbackEligibleError
 };

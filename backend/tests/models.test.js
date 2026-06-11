@@ -30,7 +30,9 @@ describe('Model routes', () => {
     expect(response.body).toEqual([
       { id: 'gemini-flash', label: 'Gemini 2.5 Flash' },
       { id: 'gemini-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
-      { id: 'groq-llama', label: 'Groq Llama 3.3 70B' }
+      { id: 'groq-llama', label: 'Groq Llama 3.3 70B' },
+      { id: 'mistral-large', label: 'Mistral Large' },
+      { id: 'cerebras-llama', label: 'Cerebras Llama 3.3 70B' }
     ]);
     expect(JSON.stringify(response.body)).not.toContain('apiKey');
     expect(JSON.stringify(response.body)).not.toContain('baseURL');
@@ -49,7 +51,9 @@ describe('Model routes', () => {
     expect(response.body).toEqual([
       { id: 'gemini-flash', label: 'Gemini 2.5 Flash', used: 2, limit: 250 },
       { id: 'gemini-flash-lite', label: 'Gemini 2.5 Flash-Lite', used: 0, limit: 1000 },
-      { id: 'groq-llama', label: 'Groq Llama 3.3 70B', used: 0, limit: 1000 }
+      { id: 'groq-llama', label: 'Groq Llama 3.3 70B', used: 0, limit: 1000 },
+      { id: 'mistral-large', label: 'Mistral Large', used: 0, limit: 100 },
+      { id: 'cerebras-llama', label: 'Cerebras Llama 3.3 70B', used: 0, limit: 150 }
     ]);
   });
 });

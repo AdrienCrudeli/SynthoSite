@@ -21,10 +21,30 @@ const AI_PROVIDERS = {
     apiKeyEnv: 'GROQ_API_KEY',
     model: 'llama-3.3-70b-versatile',
     dailyLimit: 1000
+  },
+  'mistral-large': {
+    label: 'Mistral Large',
+    baseURL: 'https://api.mistral.ai/v1',
+    apiKeyEnv: 'MISTRAL_API_KEY',
+    model: 'mistral-large-latest',
+    dailyLimit: 100
+  },
+  'cerebras-llama': {
+    label: 'Cerebras Llama 3.3 70B',
+    baseURL: 'https://api.cerebras.ai/v1',
+    apiKeyEnv: 'CEREBRAS_API_KEY',
+    model: 'llama-3.3-70b',
+    dailyLimit: 150
   }
 };
 
-const FALLBACK_ORDER = ['gemini-flash', 'groq-llama', 'gemini-flash-lite'];
+const FALLBACK_ORDER = [
+  'gemini-flash',
+  'groq-llama',
+  'gemini-flash-lite',
+  'mistral-large',
+  'cerebras-llama'
+];
 
 function getPublicModels() {
   return Object.entries(AI_PROVIDERS).map(([id, provider]) => ({
