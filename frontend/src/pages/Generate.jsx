@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import client from '../api/client';
+import client, { getModels, getUsage } from '../api/client';
+import UsageMeter from '../components/UsageMeter';
 
 const SITE_TYPES = [
   { value: 'business', label: 'Business' },
@@ -15,12 +16,51 @@ export default function Generate() {
     title: '',
     description: '',
     siteType: 'business',
+    model: '',
     primaryColor: '#14B8A6',
     mood: 'modern, trustworthy and polished'
   });
+  const [models, setModels] = useState([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [usageRefreshKey, setUsageRefreshKey] = useState(0);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadModels() {
+      setError('');
+      setIsLoadingModels(true);
+
+      try {
+        const nextModels = await getModels();
+
+        if (isCurrent) {
+          setModels(nextModels || []);
+          setFormData((current) => ({
+            ...current,
+            model: current.model || nextModels?.[0]?.id || ''
+          }));
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setError(requestError.response?.data?.message || 'Unable to load AI models.');
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingModels(false);
+        }
+      }
+    }
+
+    loadModels();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   function updateField(event) {
     setFormData((current) => ({
@@ -39,6 +79,7 @@ export default function Generate() {
         title: formData.title,
         description: formData.description,
         siteType: formData.siteType,
+        model: formData.model,
         styleOptions: {
           primaryColor: formData.primaryColor,
           mood: formData.mood,
@@ -46,6 +87,8 @@ export default function Generate() {
         }
       });
 
+      await getUsage();
+      setUsageRefreshKey((current) => current + 1);
       navigate(`/projects/${response.data.project.id}`);
     } catch (requestError) {
       setError(
@@ -106,7 +149,7 @@ export default function Generate() {
                 </Form.Group>
 
                 <Row className="g-3">
-                  <Col md={6}>
+                  <Col md={4}>
                     <Form.Group controlId="generateSiteType">
                       <Form.Label>Website type</Form.Label>
                       <Form.Select
@@ -123,7 +166,25 @@ export default function Generate() {
                       </Form.Select>
                     </Form.Group>
                   </Col>
-                  <Col md={6}>
+                  <Col md={4}>
+                    <Form.Group controlId="generateModel">
+                      <Form.Label>AI model</Form.Label>
+                      <Form.Select
+                        name="model"
+                        value={formData.model}
+                        onChange={updateField}
+                        disabled={isGenerating || isLoadingModels}
+                        required
+                      >
+                        {models.map((model) => (
+                          <option value={model.id} key={model.id}>
+                            {model.label}
+                          </option>
+                        ))}
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
                     <Form.Group controlId="generatePrimaryColor">
                       <Form.Label>Primary color</Form.Label>
                       <div className="d-flex gap-2">
@@ -161,7 +222,11 @@ export default function Generate() {
                   />
                 </Form.Group>
 
-                <Button type="submit" className="btn-accent w-100 mt-2" disabled={isGenerating}>
+                <Button
+                  type="submit"
+                  className="btn-accent w-100 mt-2"
+                  disabled={isGenerating || isLoadingModels || !formData.model}
+                >
                   {isGenerating ? (
                     <>
                       <Spinner animation="border" size="sm" className="me-2" />
@@ -193,6 +258,10 @@ export default function Generate() {
               </div>
             </Card.Body>
           </Card>
+
+          <div className="mt-4">
+            <UsageMeter refreshKey={usageRefreshKey} />
+          </div>
         </Col>
       </Row>
     </Container>

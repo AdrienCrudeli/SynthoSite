@@ -38,6 +38,7 @@ describe('Project routes', () => {
         description: 'A clean business website.',
         site_type: 'business',
         prompt: 'Create a business website.',
+        model_used: 'gemini-flash',
         style_options: '{"primaryColor":"#14B8A6","mood":"premium"}',
         created_at: '2026-06-01 10:00:00',
         updated_at: '2026-06-01 10:00:00'
@@ -55,6 +56,7 @@ describe('Project routes', () => {
       userId: 12,
       title: 'Studio Landing Page',
       siteType: 'business',
+      modelUsed: 'gemini-flash',
       styleOptions: {
         primaryColor: '#14B8A6',
         mood: 'premium'

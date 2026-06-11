@@ -17,7 +17,10 @@ export default function ProjectCard({ project }) {
     <Card className="app-card project-card h-100">
       <Card.Body className="d-flex flex-column">
         <div className="d-flex justify-content-between align-items-start gap-2 mb-3">
-          <Badge className="type-badge text-capitalize">{project.siteType || 'website'}</Badge>
+          <div className="d-flex flex-wrap gap-2">
+            <Badge className="type-badge text-capitalize">{project.siteType || 'website'}</Badge>
+            {project.modelUsed && <Badge bg="info">{project.modelUsed}</Badge>}
+          </div>
           <span className="small muted-copy">{formatDate(project.updatedAt || project.createdAt)}</span>
         </div>
         <Card.Title className="fw-bold">{project.title}</Card.Title>

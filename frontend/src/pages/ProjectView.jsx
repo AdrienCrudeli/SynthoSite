@@ -149,6 +149,7 @@ export default function ProjectView() {
           <div className="d-flex flex-wrap align-items-center gap-2">
             <h1 className="fw-bold mb-0">{project.title}</h1>
             <Badge className="type-badge text-capitalize">{project.siteType || 'website'}</Badge>
+            {project.modelUsed && <Badge bg="info">{project.modelUsed}</Badge>}
           </div>
           <p className="muted-copy mt-2 mb-0">{project.description || 'No description yet.'}</p>
         </div>

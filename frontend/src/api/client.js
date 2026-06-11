@@ -29,4 +29,14 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+export async function getModels() {
+  const response = await client.get('/models');
+  return response.data;
+}
+
+export async function getUsage() {
+  const response = await client.get('/usage');
+  return response.data;
+}
+
 export default client;

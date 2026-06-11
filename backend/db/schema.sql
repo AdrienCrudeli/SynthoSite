@@ -14,6 +14,7 @@ CREATE TABLE projects (
   description    VARCHAR(500),
   site_type      VARCHAR(50),
   prompt         TEXT NOT NULL,
+  model_used     VARCHAR(50),
   style_options  JSON,
   generated_code LONGTEXT,
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

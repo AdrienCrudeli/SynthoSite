@@ -3,6 +3,7 @@ import { Alert, Button, Col, Container, Form, Row, Spinner } from 'react-bootstr
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import ProjectCard from '../components/ProjectCard';
+import UsageMeter from '../components/UsageMeter';
 
 const SITE_TYPES = [
   { value: '', label: 'All types' },
@@ -104,6 +105,10 @@ export default function Dashboard() {
       </div>
 
       {error && <Alert variant="danger">{error}</Alert>}
+
+      <div className="mb-4">
+        <UsageMeter />
+      </div>
 
       {isLoading ? (
         <div className="text-center py-5">

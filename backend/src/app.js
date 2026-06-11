@@ -6,6 +6,7 @@ require('./config/env');
 const authRoutes = require('./routes/auth.routes');
 const projectsRoutes = require('./routes/projects.routes');
 const adminRoutes = require('./routes/admin.routes');
+const modelsRoutes = require('./routes/models.routes');
 const publicRoutes = require('./routes/public.routes');
 const { AppError, errorHandler } = require('./middleware/errorHandler');
 
@@ -49,6 +50,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', modelsRoutes);
 app.use(publicRoutes);
 
 app.use((req, res) => {

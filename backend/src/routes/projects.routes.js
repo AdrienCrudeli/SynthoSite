@@ -62,6 +62,10 @@ router.post(
     body('siteType')
       .isIn(['business', 'portfolio', 'blog', 'restaurant'])
       .withMessage('Site type must be business, portfolio, blog or restaurant.'),
+    body('model')
+      .trim()
+      .notEmpty()
+      .withMessage('AI model is required.'),
     body('styleOptions')
       .optional({ nullable: true })
       .isObject()

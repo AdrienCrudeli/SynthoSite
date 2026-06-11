@@ -8,7 +8,8 @@ The project follows the client-server assignment option with a React/Vite fronte
 
 - User signup and login with JWT authentication.
 - Password hashing with bcrypt.
-- AI website generation through the OpenAI SDK with configurable `baseURL`, `apiKey`, and model.
+- AI website generation through a backend provider registry with automatic fallback on quota errors.
+- User-facing AI model selection without exposing provider URLs or keys.
 - Project CRUD with owner-based access control.
 - Project search, sort, and type filtering.
 - Safe generated-site preview inside a sandboxed iframe.
@@ -39,7 +40,9 @@ backend/
     app.js
     server.js
   db/schema.sql
+  db/migrations/
   scripts/init-db.js
+  scripts/migrate-db.js
   tests/
 
 frontend/
@@ -57,7 +60,7 @@ frontend/
 - Node.js 20 or newer.
 - npm.
 - A MySQL 8+ database. The production recommendation is Aiven MySQL.
-- An OpenAI-compatible AI API key.
+- A Gemini API key and optionally a Groq API key.
 
 ## Environment Variables
 
@@ -81,12 +84,14 @@ DB_NAME=synthosite
 DB_SSL_REJECT_UNAUTHORIZED=false
 JWT_SECRET=change_me
 AI_API_KEY=
-AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-AI_MODEL=gemini-2.5-flash
+GEMINI_API_KEY=
+GROQ_API_KEY=
 CORS_ORIGIN=http://localhost:5173
 ```
 
 Use `DB_SSL_REJECT_UNAUTHORIZED=false` locally with Aiven if Node reports a self-signed certificate chain. For stricter production setups, configure the provider CA certificate and use `true`.
+
+`AI_API_KEY` is kept as a legacy local fallback for Gemini. New deployments should use `GEMINI_API_KEY`. `GROQ_API_KEY` enables the Groq fallback provider.
 
 Frontend example:
 
@@ -134,6 +139,14 @@ npm run db:init --prefix backend
 The script creates the `users` and `projects` tables from `schema.sql`.
 
 If the tables already exist, MySQL will return an error. In that case, the database has already been initialized.
+
+For an existing database created before AI model tracking was added, run:
+
+```bash
+npm run db:migrate --prefix backend
+```
+
+This adds `projects.model_used` if it is missing.
 
 To promote a user to admin:
 
@@ -184,6 +197,11 @@ Projects:
 - `PUT /api/projects/:id`
 - `DELETE /api/projects/:id`
 
+Models and usage:
+
+- `GET /api/models`
+- `GET /api/usage`
+
 Admin:
 
 - `GET /api/admin/users`
@@ -212,6 +230,9 @@ The test suite covers:
 - Protected project route accepts a valid JWT.
 - Admin routes reject non-admin users.
 - Admin routes return data for admin users.
+- Model routes return public model labels only.
+- Usage routes return every registered model, including zero-usage models.
+- AI generation falls back to the next provider when a provider returns `429`.
 
 ## Build
 
@@ -235,6 +256,7 @@ Recommended deployment targets:
 2. Copy host, port, user, password, and database name.
 3. Set these values in Render environment variables.
 4. Run `backend/db/schema.sql` once, either with a MySQL client or locally through `npm run db:init --prefix backend`.
+5. For existing databases, run `npm run db:migrate --prefix backend` once to add newer columns.
 
 ### Render Backend
 
@@ -256,9 +278,8 @@ Required environment variables:
 - `DB_NAME`
 - `DB_SSL_REJECT_UNAUTHORIZED`
 - `JWT_SECRET`
-- `AI_API_KEY`
-- `AI_BASE_URL`
-- `AI_MODEL`
+- `GEMINI_API_KEY`
+- `GROQ_API_KEY`
 - `CORS_ORIGIN`
 
 Set `CORS_ORIGIN` to the deployed Vercel frontend URL.
@@ -302,6 +323,8 @@ Secrets are not stored in the repository. Production secrets must be configured 
 - SQL queries use placeholders and parameter arrays.
 - Generated AI HTML is treated as untrusted content.
 - The frontend previews generated HTML only inside a sandboxed iframe.
+- The frontend sends only model IDs such as `gemini-flash`, never provider URLs or API keys.
+- `/api/models` returns only public IDs and labels.
 - Sensitive routes are protected by JWT and admin routes require `role = admin`.
 - Auth and generation routes are rate-limited.
 

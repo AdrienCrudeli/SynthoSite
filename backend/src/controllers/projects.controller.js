@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { AI_PROVIDERS } = require('../config/aiProviders');
 const { AppError } = require('../middleware/errorHandler');
 const aiService = require('../services/ai.service');
 
@@ -26,6 +27,8 @@ function serializeProject(row) {
     description: row.description,
     siteType: row.site_type,
     prompt: row.prompt,
+    modelUsed: row.model_used,
+    model_used: row.model_used,
     styleOptions: parseStyleOptions(row.style_options),
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -55,7 +58,7 @@ async function listProjects(req, res, next) {
     const sort = req.query.sort || 'recent';
     const searchLike = search ? `%${search}%` : null;
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, style_options, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, style_options, created_at, updated_at
        FROM projects
        WHERE user_id = ?
          AND (? IS NULL OR title LIKE ? OR description LIKE ?)
@@ -90,7 +93,7 @@ async function listProjects(req, res, next) {
 async function getProject(req, res, next) {
   try {
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
@@ -111,19 +114,25 @@ async function getProject(req, res, next) {
 
 async function generateProject(req, res, next) {
   try {
-    const { title, description, siteType, styleOptions = {} } = req.body;
+    const { title, description, siteType, styleOptions = {}, model } = req.body;
+
+    if (!AI_PROVIDERS[model]) {
+      throw new AppError('Selected AI model is not available.', 400);
+    }
+
     const prompt = buildGenerationPrompt({ title, description, siteType, styleOptions });
-    const generatedCode = await aiService.generateSite(prompt, styleOptions);
+    const { code: generatedCode, modelUsed } = await aiService.generateSite(prompt, styleOptions, model);
     const result = await db.query(
       `INSERT INTO projects
-        (user_id, title, description, site_type, prompt, style_options, generated_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, title, description, site_type, prompt, model_used, style_options, generated_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         title,
         description || null,
         siteType,
         prompt,
+        modelUsed,
         JSON.stringify(styleOptions),
         generatedCode
       ]
@@ -137,6 +146,8 @@ async function generateProject(req, res, next) {
         description: description || null,
         siteType,
         prompt,
+        modelUsed,
+        model_used: modelUsed,
         styleOptions,
         generatedCode
       }
@@ -159,7 +170,7 @@ async function updateProject(req, res, next) {
     }
 
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
