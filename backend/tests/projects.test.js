@@ -95,6 +95,7 @@ describe('Project routes', () => {
     db.query
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({ insertId: 9 })
       .mockResolvedValueOnce([{ next_version: 1 }])
       .mockResolvedValueOnce({ insertId: 20 });
@@ -129,18 +130,19 @@ describe('Project routes', () => {
           'gemini-flash-lite',
           'mistral-large',
           'cerebras-llama'
-        ]
+        ],
+        mode: 'single'
       }
     );
     expect(imageService.injectImages).toHaveBeenCalledWith(
       '<!doctype html><html><body><img data-query="red ford mustang sports car" alt="Ford Mustang" width="1200" height="600" /></body></html>'
     );
     expect(usageService.recordAiUsage).toHaveBeenCalledWith('gemini-flash', 'generation');
-    expect(db.query.mock.calls[2][1][6]).toBe(1);
-    expect(db.query.mock.calls[2][1][8]).toBe(
+    expect(db.query.mock.calls[3][1][6]).toBe(1);
+    expect(db.query.mock.calls[3][1][8]).toBe(
       '<!doctype html><html><body><img src="https://images.pexels.com/photos/mustang.jpeg" alt="Ford Mustang" width="1200" height="600" /></body></html>'
     );
-    expect(db.query.mock.calls[4][0]).toContain('INSERT INTO project_versions');
+    expect(db.query.mock.calls[5][0]).toContain('INSERT INTO project_versions');
     expect(response.body.project.generatedCode).toContain('https://images.pexels.com/photos/mustang.jpeg');
     expect(response.body.project.isPublic).toBe(true);
   });
@@ -164,6 +166,94 @@ describe('Project routes', () => {
     expect(response.status).toBe(400);
     expect(response.body.message).toBe('Selected AI model is disabled by an administrator.');
     expect(aiService.generateSite).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/projects/generate rejects temporarily saturated models', async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000);
+    db.query
+      .mockResolvedValueOnce([
+        { model_id: 'groq-llama', enabled: 1, auto_disabled_until: future }
+      ])
+      .mockResolvedValueOnce([
+        { model_id: 'groq-llama', enabled: 1, auto_disabled_until: future }
+      ]);
+
+    const response = await request(app)
+      .post('/api/projects/generate')
+      .set('Authorization', `Bearer ${createToken()}`)
+      .send({
+        title: 'Saturated Model',
+        description: 'Should not generate.',
+        siteType: 'business',
+        model: 'groq-llama',
+        styleOptions: {}
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Selected AI model is temporarily saturated. Please choose another model.');
+    expect(aiService.generateSite).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/projects/generate validates multi-page compatible models', async () => {
+    const response = await request(app)
+      .post('/api/projects/generate')
+      .set('Authorization', `Bearer ${createToken()}`)
+      .send({
+        title: 'Multi-page Gemini',
+        description: 'Should be rejected.',
+        siteType: 'business',
+        model: 'gemini-flash',
+        mode: 'multipage',
+        styleOptions: {}
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Multi-page generation is available only with Groq and Cerebras models.');
+    expect(db.query).not.toHaveBeenCalled();
+    expect(aiService.generateSite).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/projects/generate sends multi-page mode only to compatible fallback models', async () => {
+    aiService.generateSite.mockResolvedValueOnce({
+      code: '<!doctype html><html><body><section id="page-home">Restaurant</section></body></html>',
+      modelUsed: 'groq-llama'
+    });
+    imageService.injectImages.mockResolvedValueOnce(
+      '<!doctype html><html><body><section id="page-home">Restaurant</section></body></html>'
+    );
+    db.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ insertId: 11 })
+      .mockResolvedValueOnce([{ next_version: 1 }])
+      .mockResolvedValueOnce({ insertId: 23 });
+
+    const response = await request(app)
+      .post('/api/projects/generate')
+      .set('Authorization', `Bearer ${createToken()}`)
+      .send({
+        title: 'Multi-page Restaurant',
+        description: 'A complete restaurant website.',
+        siteType: 'restaurant',
+        model: 'groq-llama',
+        mode: 'multipage',
+        styleOptions: {}
+      });
+
+    expect(response.status).toBe(201);
+    expect(aiService.generateSite).toHaveBeenCalledWith(
+      expect.stringContaining('Multi-page Restaurant'),
+      {},
+      'groq-llama',
+      {
+        allowedModelIds: [
+          'groq-llama',
+          'cerebras-llama'
+        ],
+        mode: 'multipage'
+      }
+    );
   });
 
   test('POST /api/projects/:id/revise updates generated HTML for the owner', async () => {

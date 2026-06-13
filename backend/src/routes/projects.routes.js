@@ -66,6 +66,10 @@ router.post(
       .trim()
       .notEmpty()
       .withMessage('AI model is required.'),
+    body('mode')
+      .optional({ nullable: true, checkFalsy: true })
+      .isIn(['single', 'multipage'])
+      .withMessage('Generation mode must be single or multipage.'),
     body('isPublic')
       .optional({ nullable: true })
       .isBoolean()

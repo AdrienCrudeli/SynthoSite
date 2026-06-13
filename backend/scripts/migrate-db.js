@@ -121,12 +121,36 @@ async function main() {
 
   await connection.execute(
     `CREATE TABLE IF NOT EXISTS ai_model_settings (
-      model_id   VARCHAR(50) PRIMARY KEY,
-      enabled    TINYINT(1) NOT NULL DEFAULT 1,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      model_id            VARCHAR(50) PRIMARY KEY,
+      enabled             TINYINT(1) NOT NULL DEFAULT 1,
+      auto_disabled_until TIMESTAMP NULL,
+      updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`
   );
   console.log('Migration applied: ai_model_settings table ensured.');
+
+  const [autoDisabledColumns] = await connection.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'ai_model_settings' AND COLUMN_NAME = 'auto_disabled_until'`,
+    [process.env.DB_NAME]
+  );
+
+  if (autoDisabledColumns.length === 0) {
+    await connection.execute('ALTER TABLE ai_model_settings ADD COLUMN auto_disabled_until TIMESTAMP NULL AFTER enabled');
+    console.log('Migration applied: ai_model_settings.auto_disabled_until added.');
+  } else {
+    console.log('Migration skipped: ai_model_settings.auto_disabled_until already exists.');
+  }
+
+  await connection.execute(
+    `CREATE TABLE IF NOT EXISTS image_cache (
+      query      VARCHAR(255) PRIMARY KEY,
+      urls       JSON NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`
+  );
+  console.log('Migration applied: image_cache table ensured.');
 
   await connection.execute(
     `CREATE TABLE IF NOT EXISTS ai_usage (

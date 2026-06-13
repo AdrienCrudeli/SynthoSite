@@ -1,15 +1,17 @@
 const OpenAI = require('openai');
 const { AI_PROVIDERS, FALLBACK_ORDER } = require('../config/aiProviders');
 const { AppError } = require('../middleware/errorHandler');
+const modelSettings = require('./modelSettings.service');
 require('../config/env');
 
-const SYSTEM_PROMPT = `You are a website generator. From the provided description, return ONE complete,
+const SINGLE_PAGE_SYSTEM_PROMPT = `You are a website generator. From the provided description, return ONE complete,
 standalone HTML file. STRICT rules:
 - Reply ONLY with HTML code, with no text before or after it and no markdown fences.
 - The document must be complete: from <!doctype html> to </html>.
 - Style with the Tailwind CSS CDN: <script src="https://cdn.tailwindcss.com"></script> in the <head>.
 - The site must be responsive, mobile-first, modern and polished.
 - Required structure: header with navigation, hero section, 2 to 3 content sections, footer.
+- Use at most 5 to 6 images across the whole site, reusing the same visual themes when relevant.
 - For EVERY image, NEVER write a URL and NEVER add a src attribute. Instead, insert an <img> tag
   with a data-query attribute containing 2 to 5 ENGLISH keywords that precisely describe the real
   subject of the image and directly match the surrounding section, plus width, height and alt.
@@ -23,6 +25,39 @@ standalone HTML file. STRICT rules:
 - Videos may also be used when relevant, but limit them to 1 or 2 videos maximum.
 - Follow the provided style preferences closely: colors, theme and title.
 - Do not use external dependencies other than the Tailwind CDN.`;
+
+const MULTIPAGE_SYSTEM_PROMPT = `Tu es un générateur de sites web multi-pages. À partir de la description fournie, tu produis UN SEUL
+fichier HTML complet et autonome contenant PLUSIEURS pages. Règles STRICTES :
+- Réponds UNIQUEMENT avec le code HTML, de <!DOCTYPE html> à </html>, sans texte ni balises markdown.
+- Style via Tailwind CSS en CDN : <script src="https://cdn.tailwindcss.com"></script> dans le <head>.
+- Le site comporte 3 à 5 pages adaptées au type de site (ex. Accueil, À propos, Services/Menu,
+  Galerie, Contact). Chaque page est une <section> avec un id préfixé "page-" (ex. id="page-home").
+- Une barre de navigation fixe en haut, présente sur tout le site, avec un lien par page portant
+  l'attribut data-page (ex. <a href="#" data-page="about">À propos</a>).
+- Toutes les pages partagent le MÊME header, le MÊME footer et la MÊME charte (couleurs, typographie).
+- La page d'accueil a id="page-home" et est la seule visible au chargement.
+- Insère, juste avant </body>, ce script EXACTEMENT tel quel :
+  <script>
+    const pages = document.querySelectorAll('[id^="page-"]');
+    const links = document.querySelectorAll('[data-page]');
+    function show(name){ pages.forEach(p => { p.style.display = (p.id === 'page-' + name) ? 'block' : 'none'; }); }
+    links.forEach(l => l.addEventListener('click', e => { e.preventDefault(); show(l.dataset.page); window.scrollTo(0,0); }));
+    show('home');
+  </script>
+- Utilise au maximum 5 à 6 images sur l'ensemble du site.
+- Pour CHAQUE image, n'écris JAMAIS d'URL ni de src. Insère <img> avec data-query contenant 2 à 5
+  mots-clés EN ANGLAIS décrivant le sujet réel, plus width, height et alt. Le src sera injecté.
+- Dans le footer (commun à toutes les pages), ajoute « Photos provided by Pexels » avec un lien vers
+  https://www.pexels.com.
+- Respecte les préférences de style fournies (couleurs, thème, titre).`;
+
+function getSystemPrompt(mode = 'single') {
+  return mode === 'multipage' ? MULTIPAGE_SYSTEM_PROMPT : SINGLE_PAGE_SYSTEM_PROMPT;
+}
+
+function getDefaultMaxTokens(mode = 'single') {
+  return mode === 'multipage' ? 16000 : 8000;
+}
 
 function cleanGeneratedHtml(content) {
   if (!content || typeof content !== 'string') {
@@ -125,7 +160,19 @@ function buildSelectedProviderError(providerId, error) {
   return error;
 }
 
-async function tryProvider(providerId, userPrompt, styleOptions) {
+async function createCompletion(client, provider, userPrompt, styleOptions, mode, maxTokens) {
+  return client.chat.completions.create({
+    model: provider.model,
+    messages: [
+      { role: 'system', content: getSystemPrompt(mode) },
+      { role: 'user', content: buildUserPrompt(userPrompt, styleOptions) }
+    ],
+    temperature: 0.7,
+    max_tokens: maxTokens
+  });
+}
+
+async function tryProvider(providerId, userPrompt, styleOptions, options = {}) {
   const provider = AI_PROVIDERS[providerId];
 
   if (!provider) {
@@ -145,18 +192,18 @@ async function tryProvider(providerId, userPrompt, styleOptions) {
     baseURL: provider.baseURL
   });
 
-  const completion = await client.chat.completions.create({
-    model: provider.model,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: buildUserPrompt(userPrompt, styleOptions) }
-    ],
-    temperature: 0.7,
-    max_tokens: 8000
-  });
+  const mode = options.mode || 'single';
+  const initialMaxTokens = options.maxTokens || getDefaultMaxTokens(mode);
+  let completion = await createCompletion(client, provider, userPrompt, styleOptions, mode, initialMaxTokens);
+  let choice = completion.choices?.[0];
+
+  if (mode === 'multipage' && choice?.finish_reason === 'length' && initialMaxTokens < 24000) {
+    completion = await createCompletion(client, provider, userPrompt, styleOptions, mode, 24000);
+    choice = completion.choices?.[0];
+  }
 
   return {
-    code: cleanGeneratedHtml(completion.choices?.[0]?.message?.content),
+    code: cleanGeneratedHtml(choice?.message?.content),
     modelUsed: providerId
   };
 }
@@ -167,14 +214,32 @@ async function generateSite(
   requestedModelId = FALLBACK_ORDER[0],
   options = {}
 ) {
-  const order = getGenerationOrder(requestedModelId, options.allowedModelIds);
+  const mode = options.mode || 'single';
+  let allowedModelIds = options.allowedModelIds;
+
+  if (!Array.isArray(allowedModelIds)) {
+    try {
+      allowedModelIds = await modelSettings.getEnabledModelIds();
+    } catch (settingsError) {
+      allowedModelIds = null;
+    }
+  }
+
+  if (Array.isArray(allowedModelIds) && mode === 'multipage') {
+    allowedModelIds = allowedModelIds.filter((id) => AI_PROVIDERS[id]?.supportsMultiPage);
+  }
+
+  const order = getGenerationOrder(requestedModelId, allowedModelIds);
   let sawQuotaError = false;
   let sawMissingKey = false;
   let sawUnavailableProvider = false;
 
   for (const providerId of order) {
     try {
-      const result = await tryProvider(providerId, userPrompt, styleOptions);
+      const result = await tryProvider(providerId, userPrompt, styleOptions, {
+        mode,
+        maxTokens: options.maxTokens
+      });
 
       if (result) {
         return result;
@@ -188,6 +253,11 @@ async function generateSite(
 
       if (error.status === 429 || error.statusCode === 429) {
         sawQuotaError = true;
+        try {
+          await modelSettings.autoDisableModel(providerId);
+        } catch (settingsError) {
+          // Fallback should still continue if the model status table is temporarily unavailable.
+        }
         continue;
       }
 
@@ -246,6 +316,8 @@ module.exports = {
   buildUserPrompt,
   buildRevisionPrompt,
   getGenerationOrder,
+  getSystemPrompt,
+  getDefaultMaxTokens,
   isFallbackEligibleError,
   isProviderConfigurationError,
   buildSelectedProviderError

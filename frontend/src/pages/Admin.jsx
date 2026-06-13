@@ -44,7 +44,7 @@ export default function Admin() {
     users: users.length,
     admins: users.filter((item) => item.role === 'admin').length,
     projects: projects.length,
-    enabledModels: models.filter((item) => item.enabled).length
+    enabledModels: models.filter((item) => item.available !== false).length
   }), [models, projects.length, users]);
 
   async function loadAdminData() {
@@ -138,11 +138,27 @@ export default function Admin() {
   function getUsageVariant(item) {
     const ratio = item.limit > 0 ? item.used / item.limit : 0;
 
+    if (item.available === false) {
+      return 'secondary';
+    }
+
     if (ratio > 0.8) {
       return 'danger';
     }
 
-    return item.enabled === false ? 'secondary' : 'info';
+    return 'info';
+  }
+
+  function getModelBadge(model) {
+    if (!model.enabled) {
+      return { bg: 'secondary', label: 'Disabled' };
+    }
+
+    if (model.status === 'saturated') {
+      return { bg: 'warning', label: 'Saturated' };
+    }
+
+    return { bg: 'success', label: 'Available' };
   }
 
   const pexelsRatio = pexelsUsage?.limit > 0 ? pexelsUsage.used / pexelsUsage.limit : 0;
@@ -226,6 +242,7 @@ export default function Admin() {
                   <div className="d-grid gap-3">
                     {models.map((model) => {
                       const variant = getUsageVariant(model);
+                      const badge = getModelBadge(model);
 
                       return (
                         <div className="admin-model-row" key={model.id}>
@@ -233,16 +250,24 @@ export default function Admin() {
                             <div>
                               <div className="d-flex align-items-center gap-2">
                                 <strong>{model.label}</strong>
-                                <Badge bg={model.enabled ? 'success' : 'secondary'}>
-                                  {model.enabled ? 'Enabled' : 'Disabled'}
+                                <Badge bg={badge.bg}>
+                                  {badge.label}
                                 </Badge>
                               </div>
                               <small className="muted-copy">{model.used} / {model.limit} generations today</small>
+                              {model.status === 'saturated' && model.autoDisabledUntil && (
+                                <small className="d-block muted-copy">
+                                  Saturated - automatic reactivation {formatDate(model.autoDisabledUntil)}
+                                </small>
+                              )}
+                              {model.supportsMultiPage && (
+                                <small className="d-block muted-copy">Multi-page compatible</small>
+                              )}
                             </div>
                             <Form.Check
                               type="switch"
                               id={`model-enabled-${model.id}`}
-                              label={model.enabled ? 'Available' : 'Blocked'}
+                              label={model.enabled ? 'Manual access on' : 'Manual access off'}
                               checked={model.enabled}
                               disabled={Boolean(togglingModelId)}
                               onChange={(event) => handleModelToggle(model, event.target.checked)}

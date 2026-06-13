@@ -15,7 +15,13 @@ describe('Image injection service', () => {
     jest.clearAllMocks();
     global.fetch = jest.fn();
     process.env.PEXELS_API_KEY = 'test_pexels_key';
-    db.query.mockResolvedValue([]);
+    db.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('FROM image_cache')) {
+        return [];
+      }
+
+      return { affectedRows: 1 };
+    });
   });
 
   afterEach(() => {
@@ -77,6 +83,62 @@ describe('Image injection service', () => {
     expect(result).not.toContain('data-query=');
     expect(result).toContain('Photos provided by Pexels');
     expect(result).toContain('https://www.pexels.com');
+  });
+
+  test('uses cached Pexels URL lists without calling Pexels again', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('FROM image_cache')) {
+        return [
+          {
+            urls: JSON.stringify([
+              'https://images.pexels.com/photos/cached-restaurant-1.jpeg',
+              'https://images.pexels.com/photos/cached-restaurant-2.jpeg'
+            ]),
+            created_at: new Date()
+          }
+        ];
+      }
+
+      return { affectedRows: 1 };
+    });
+
+    const result = await injectImages(
+      '<!doctype html><html><body><img data-query="restaurant dining table" alt="Restaurant dining" width="1200" height="600" /></body></html>'
+    );
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result).toMatch(/src="https:\/\/images\.pexels\.com\/photos\/cached-restaurant-[12]\.jpeg"/);
+    expect(result).not.toContain('data-query=');
+  });
+
+  test('picks distinct cached URLs for repeated keywords within one generation', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('FROM image_cache')) {
+        return [
+          {
+            urls: JSON.stringify([
+              'https://images.pexels.com/photos/coffee-1.jpeg',
+              'https://images.pexels.com/photos/coffee-2.jpeg'
+            ]),
+            created_at: new Date()
+          }
+        ];
+      }
+
+      return { affectedRows: 1 };
+    });
+
+    const result = await injectImages(`<!doctype html>
+      <html>
+        <body>
+          <img data-query="coffee shop interior" alt="Coffee shop" width="1200" height="600" />
+          <img data-query="coffee shop interior" alt="Coffee bar" width="1200" height="600" />
+        </body>
+      </html>`);
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result).toContain('src="https://images.pexels.com/photos/coffee-1.jpeg"');
+    expect(result).toContain('src="https://images.pexels.com/photos/coffee-2.jpeg"');
   });
 
   test('uses a loading fallback when Pexels is unavailable', async () => {

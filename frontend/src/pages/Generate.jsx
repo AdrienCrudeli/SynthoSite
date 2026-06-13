@@ -52,6 +52,7 @@ export default function Generate() {
     title: '',
     description: '',
     siteType: 'business',
+    mode: 'single',
     model: '',
     isPublic: false,
     primaryColor: '#14B8A6',
@@ -75,10 +76,11 @@ export default function Generate() {
         const nextModels = await getModels();
 
         if (isCurrent) {
+          const firstAvailableModel = nextModels?.find((model) => model.available !== false);
           setModels(nextModels || []);
           setFormData((current) => ({
             ...current,
-            model: current.model || nextModels?.[0]?.id || ''
+            model: current.model || firstAvailableModel?.id || nextModels?.[0]?.id || ''
           }));
         }
       } catch (requestError) {
@@ -99,6 +101,33 @@ export default function Generate() {
     };
   }, []);
 
+  useEffect(() => {
+    setFormData((current) => {
+      const selectableModels = models.filter((model) => (
+        current.mode === 'multipage' ? model.supportsMultiPage : true
+      ));
+      const selectedModel = selectableModels.find((model) => (
+        model.id === current.model && model.available !== false
+      ));
+
+      if (selectedModel) {
+        return current;
+      }
+
+      const fallbackModel = selectableModels.find((model) => model.available !== false) || selectableModels[0];
+      const nextModelId = fallbackModel?.id || '';
+
+      if (nextModelId === current.model) {
+        return current;
+      }
+
+      return {
+        ...current,
+        model: nextModelId
+      };
+    });
+  }, [models, formData.mode]);
+
   function updateField(event) {
     setFormData((current) => ({
       ...current,
@@ -116,6 +145,7 @@ export default function Generate() {
         description: nextFormData.description,
         siteType: nextFormData.siteType,
         model: nextFormData.model,
+        mode: nextFormData.mode,
         isPublic: nextFormData.isPublic,
         styleOptions: {
           primaryColor: nextFormData.primaryColor,
@@ -153,6 +183,12 @@ export default function Generate() {
     setFormData(nextFormData);
     await generateWebsite(nextFormData);
   }
+
+  const selectableModels = models.filter((model) => (
+    formData.mode === 'multipage' ? model.supportsMultiPage : true
+  ));
+  const selectedModel = selectableModels.find((model) => model.id === formData.model);
+  const canGenerate = !isGenerating && !isLoadingModels && Boolean(selectedModel) && selectedModel.available !== false;
 
   return (
     <Container className="page-section">
@@ -203,7 +239,7 @@ export default function Generate() {
                 </Form.Group>
 
                 <Row className="g-3">
-                  <Col md={4}>
+                  <Col md={6} lg={3}>
                     <Form.Group controlId="generateSiteType">
                       <Form.Label>Website type</Form.Label>
                       <Form.Select
@@ -220,25 +256,53 @@ export default function Generate() {
                       </Form.Select>
                     </Form.Group>
                   </Col>
-                  <Col md={4}>
+                  <Col md={6} lg={3}>
+                    <Form.Group controlId="generateMode">
+                      <Form.Label>Generation type</Form.Label>
+                      <Form.Select
+                        name="mode"
+                        value={formData.mode}
+                        onChange={updateField}
+                        disabled={isGenerating}
+                      >
+                        <option value="single">Single page</option>
+                        <option value="multipage">Multi-page site</option>
+                      </Form.Select>
+                      {formData.mode === 'multipage' && (
+                        <Form.Text className="muted-copy">
+                          Available with Groq and Cerebras only.
+                        </Form.Text>
+                      )}
+                    </Form.Group>
+                  </Col>
+                  <Col md={6} lg={3}>
                     <Form.Group controlId="generateModel">
                       <Form.Label>AI model</Form.Label>
                       <Form.Select
                         name="model"
                         value={formData.model}
                         onChange={updateField}
-                        disabled={isGenerating || isLoadingModels}
+                        disabled={isGenerating || isLoadingModels || selectableModels.length === 0}
                         required
                       >
-                        {models.map((model) => (
-                          <option value={model.id} key={model.id}>
+                        {selectableModels.length === 0 && (
+                          <option value="">No compatible model</option>
+                        )}
+                        {selectableModels.map((model) => (
+                          <option
+                            value={model.id}
+                            key={model.id}
+                            disabled={model.available === false}
+                          >
                             {model.label}
+                            {model.status === 'saturated' ? ' (saturated)' : ''}
+                            {model.status === 'disabled' ? ' (disabled)' : ''}
                           </option>
                         ))}
                       </Form.Select>
                     </Form.Group>
                   </Col>
-                  <Col md={4}>
+                  <Col md={6} lg={3}>
                     <Form.Group controlId="generatePrimaryColor">
                       <Form.Label>Primary color</Form.Label>
                       <div className="d-flex gap-2">
@@ -294,7 +358,7 @@ export default function Generate() {
                   <Button
                     type="submit"
                     className="btn-accent"
-                    disabled={isGenerating || isLoadingModels || !formData.model}
+                    disabled={!canGenerate}
                   >
                     {isGenerating ? (
                       <>
@@ -309,7 +373,7 @@ export default function Generate() {
                     type="button"
                     variant="outline-accent"
                     onClick={handleSurprise}
-                    disabled={isGenerating || isLoadingModels || !formData.model}
+                    disabled={!canGenerate}
                   >
                     Surprise me
                   </Button>

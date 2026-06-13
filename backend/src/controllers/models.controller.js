@@ -1,15 +1,19 @@
-const { AI_PROVIDERS } = require('../config/aiProviders');
 const modelSettings = require('../services/modelSettings.service');
 const { getAiUsageByModel } = require('../services/usage.service');
 
 async function listModels(req, res, next) {
   try {
-    const models = await modelSettings.listModels({ includeDisabled: false });
+    const models = await modelSettings.listModels({ includeDisabled: true });
 
     return res.json(
       models.map((model) => ({
         id: model.id,
-        label: model.label
+        label: model.label,
+        enabled: model.enabled,
+        available: model.available,
+        status: model.status,
+        autoDisabledUntil: model.autoDisabledUntil,
+        supportsMultiPage: model.supportsMultiPage
       }))
     );
   } catch (error) {
@@ -19,21 +23,21 @@ async function listModels(req, res, next) {
 
 async function getUsage(req, res, next) {
   try {
-    const usageByModel = await getAiUsageByModel();
-
-    const visibleModels = req.user.role === 'admin'
-      ? Object.entries(AI_PROVIDERS)
-      : (await modelSettings.listModels({ includeDisabled: false })).map((model) => [
-        model.id,
-        AI_PROVIDERS[model.id]
-      ]);
+    const [usageByModel, models] = await Promise.all([
+      getAiUsageByModel(),
+      modelSettings.listModels({ includeDisabled: true })
+    ]);
 
     return res.json(
-      visibleModels.map(([id, provider]) => ({
-        id,
-        label: provider.label,
-        used: usageByModel.get(id) || 0,
-        limit: provider.dailyLimit
+      models.map((model) => ({
+        id: model.id,
+        label: model.label,
+        used: usageByModel.get(model.id) || 0,
+        limit: model.limit,
+        enabled: model.enabled,
+        available: model.available,
+        status: model.status,
+        autoDisabledUntil: model.autoDisabledUntil
       }))
     );
   } catch (error) {

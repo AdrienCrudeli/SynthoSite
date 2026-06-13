@@ -16,11 +16,25 @@ jest.mock('openai', () => {
   }));
 });
 
+jest.mock('../src/services/modelSettings.service', () => ({
+  autoDisableModel: jest.fn(),
+  getEnabledModelIds: jest.fn()
+}));
+
 const { generateSite, reviseSite } = require('../src/services/ai.service');
+const modelSettings = require('../src/services/modelSettings.service');
 
 describe('AI service provider fallback', () => {
   beforeEach(() => {
     mockCreate.mockReset();
+    modelSettings.autoDisableModel.mockResolvedValue(null);
+    modelSettings.getEnabledModelIds.mockResolvedValue([
+      'gemini-flash',
+      'groq-llama',
+      'gemini-flash-lite',
+      'mistral-large',
+      'cerebras-llama'
+    ]);
   });
 
   test('instructs providers to use data-query images and Pexels attribution', async () => {
@@ -42,8 +56,33 @@ describe('AI service provider fallback', () => {
     expect(systemPrompt).toContain('The src attribute will be injected automatically by the server');
     expect(systemPrompt).toContain('Photos provided by Pexels');
     expect(systemPrompt).toContain('https://www.pexels.com');
+    expect(systemPrompt).toContain('Use at most 5 to 6 images across the whole site');
     expect(systemPrompt).not.toContain('pollinations');
     expect(systemPrompt).not.toContain('picsum');
+  });
+
+  test('uses the multi-page prompt and larger token budget when requested', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: '<!doctype html><html><body><section id="page-home">ok</section></body></html>'
+          }
+        }
+      ]
+    });
+
+    await generateSite('Build a multi-page restaurant website', {}, 'groq-llama', {
+      mode: 'multipage'
+    });
+
+    const request = mockCreate.mock.calls[0][0];
+    expect(request.model).toBe('llama-3.3-70b-versatile');
+    expect(request.max_tokens).toBe(16000);
+    expect(request.messages[0].content).toContain('PLUSIEURS pages');
+    expect(request.messages[0].content).toContain('id="page-home"');
+    expect(request.messages[0].content).toContain("show('home');");
+    expect(request.messages[0].content).toContain('Utilise au maximum 5 à 6 images');
   });
 
   test('sends the current HTML and requested change when revising a site', async () => {
@@ -97,6 +136,7 @@ describe('AI service provider fallback', () => {
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(mockCreate.mock.calls[0][0].model).toBe('gemini-2.5-flash');
     expect(mockCreate.mock.calls[1][0].model).toBe('llama-3.3-70b-versatile');
+    expect(modelSettings.autoDisableModel).toHaveBeenCalledWith('gemini-flash');
   });
 
   test('surfaces selected provider auth errors instead of silently falling back', async () => {

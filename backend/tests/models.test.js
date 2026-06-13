@@ -27,9 +27,9 @@ describe('Model routes', () => {
     usageService.getAiUsageByModel.mockResolvedValue(new Map());
   });
 
-  test('GET /api/models returns public model labels only', async () => {
+  test('GET /api/models returns public model labels and availability status', async () => {
     db.query.mockResolvedValueOnce([
-      { model_id: 'mistral-large', enabled: 0 }
+      { model_id: 'mistral-large', enabled: 0, auto_disabled_until: null }
     ]);
 
     const response = await request(app)
@@ -37,12 +37,40 @@ describe('Model routes', () => {
       .set('Authorization', `Bearer ${createToken()}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual([
-      { id: 'gemini-flash', label: 'Gemini 2.5 Flash' },
-      { id: 'gemini-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
-      { id: 'groq-llama', label: 'Groq Llama 3.3 70B' },
-      { id: 'cerebras-llama', label: 'Cerebras GPT-OSS 120B' }
-    ]);
+    expect(response.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'gemini-flash',
+        label: 'Gemini 2.5 Flash',
+        enabled: true,
+        available: true,
+        status: 'available',
+        autoDisabledUntil: null,
+        supportsMultiPage: false
+      }),
+      expect.objectContaining({
+        id: 'groq-llama',
+        label: 'Groq Llama 3.3 70B',
+        enabled: true,
+        available: true,
+        status: 'available',
+        supportsMultiPage: true
+      }),
+      expect.objectContaining({
+        id: 'mistral-large',
+        label: 'Mistral Large',
+        enabled: false,
+        available: false,
+        status: 'disabled',
+        supportsMultiPage: false
+      }),
+      expect.objectContaining({
+        id: 'cerebras-llama',
+        label: 'Cerebras GPT-OSS 120B',
+        enabled: true,
+        available: true,
+        supportsMultiPage: true
+      })
+    ]));
     expect(JSON.stringify(response.body)).not.toContain('apiKey');
     expect(JSON.stringify(response.body)).not.toContain('baseURL');
   });
@@ -59,11 +87,56 @@ describe('Model routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual([
-      { id: 'gemini-flash', label: 'Gemini 2.5 Flash', used: 2, limit: 250 },
-      { id: 'gemini-flash-lite', label: 'Gemini 2.5 Flash-Lite', used: 0, limit: 1000 },
-      { id: 'groq-llama', label: 'Groq Llama 3.3 70B', used: 0, limit: 1000 },
-      { id: 'mistral-large', label: 'Mistral Large', used: 0, limit: 100 },
-      { id: 'cerebras-llama', label: 'Cerebras GPT-OSS 120B', used: 0, limit: 150 }
+      {
+        id: 'gemini-flash',
+        label: 'Gemini 2.5 Flash',
+        used: 2,
+        limit: 250,
+        enabled: true,
+        available: true,
+        status: 'available',
+        autoDisabledUntil: null
+      },
+      {
+        id: 'gemini-flash-lite',
+        label: 'Gemini 2.5 Flash-Lite',
+        used: 0,
+        limit: 1000,
+        enabled: true,
+        available: true,
+        status: 'available',
+        autoDisabledUntil: null
+      },
+      {
+        id: 'groq-llama',
+        label: 'Groq Llama 3.3 70B',
+        used: 0,
+        limit: 1000,
+        enabled: true,
+        available: true,
+        status: 'available',
+        autoDisabledUntil: null
+      },
+      {
+        id: 'mistral-large',
+        label: 'Mistral Large',
+        used: 0,
+        limit: 100,
+        enabled: true,
+        available: true,
+        status: 'available',
+        autoDisabledUntil: null
+      },
+      {
+        id: 'cerebras-llama',
+        label: 'Cerebras GPT-OSS 120B',
+        used: 0,
+        limit: 150,
+        enabled: true,
+        available: true,
+        status: 'available',
+        autoDisabledUntil: null
+      }
     ]);
   });
 });

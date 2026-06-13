@@ -53,9 +53,16 @@ CREATE TABLE project_versions (
 );
 
 CREATE TABLE ai_model_settings (
-  model_id   VARCHAR(50) PRIMARY KEY,
-  enabled    TINYINT(1) NOT NULL DEFAULT 1,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  model_id            VARCHAR(50) PRIMARY KEY,
+  enabled             TINYINT(1) NOT NULL DEFAULT 1,
+  auto_disabled_until TIMESTAMP NULL,
+  updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE image_cache (
+  query      VARCHAR(255) PRIMARY KEY,
+  urls       JSON NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE ai_usage (

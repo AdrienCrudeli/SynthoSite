@@ -40,6 +40,9 @@ const GENERIC_WORDS = new Set([
   'the'
 ]);
 
+const IMAGE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const EMPTY_IMAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 function normalizeQuery(value) {
   return String(value || '')
     .toLowerCase()
@@ -118,15 +121,87 @@ function buildQueryCandidates(query, alt = '') {
   return candidates;
 }
 
-async function fetchPexelsCandidate(query) {
-  if (!process.env.PEXELS_API_KEY) {
+function isMissingImageCacheTableError(error) {
+  return error?.code === 'ER_NO_SUCH_TABLE' || error?.errno === 1146;
+}
+
+function parseCachedUrls(value) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function isCacheEntryFresh(row, urls) {
+  const createdAt = new Date(row.created_at).getTime();
+
+  if (!Number.isFinite(createdAt)) {
+    return true;
+  }
+
+  const ttl = urls.length > 0 ? IMAGE_CACHE_TTL_MS : EMPTY_IMAGE_CACHE_TTL_MS;
+  return Date.now() - createdAt <= ttl;
+}
+
+async function getCachedImageUrls(query) {
+  try {
+    const rows = await db.query(
+      'SELECT urls, created_at FROM image_cache WHERE query = ? LIMIT 1',
+      [query]
+    );
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    const urls = parseCachedUrls(rows[0].urls);
+
+    if (!isCacheEntryFresh(rows[0], urls)) {
+      return null;
+    }
+
+    return urls;
+  } catch (error) {
+    if (isMissingImageCacheTableError(error)) {
+      return null;
+    }
+
     return null;
+  }
+}
+
+async function saveImageCache(query, urls) {
+  try {
+    await db.query(
+      `INSERT INTO image_cache (query, urls)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE urls = VALUES(urls), created_at = CURRENT_TIMESTAMP`,
+      [query, JSON.stringify(urls)]
+    );
+  } catch (error) {
+    // Image generation should not fail if the cache table is unavailable.
+  }
+}
+
+async function fetchPexelsCandidateUrls(query) {
+  if (!process.env.PEXELS_API_KEY) {
+    return { urls: [], quotaExhausted: false, shouldCache: false };
   }
 
   try {
     const url = new URL('https://api.pexels.com/v1/search');
     url.searchParams.set('query', query);
-    url.searchParams.set('per_page', '8');
+    url.searchParams.set('per_page', '10');
     url.searchParams.set('orientation', 'landscape');
     url.searchParams.set('locale', 'en-US');
 
@@ -139,32 +214,82 @@ async function fetchPexelsCandidate(query) {
 
     if (!res.ok) {
       await recordPexelsRequest(query, res.status, false);
-      return null;
+      return {
+        urls: [],
+        quotaExhausted: res.status === 429,
+        shouldCache: res.status === 429
+      };
     }
 
     const data = await res.json();
-    const photo = data.photos?.find((item) => item.src?.large2x || item.src?.landscape || item.src?.large);
-    const imageUrl = photo?.src?.large2x || photo?.src?.landscape || photo?.src?.large || null;
-    await recordPexelsRequest(query, res.status, Boolean(imageUrl));
-    return imageUrl;
+    const urls = [...new Set((data.photos || [])
+      .map((item) => item.src?.large2x || item.src?.landscape || item.src?.large)
+      .filter(Boolean))];
+
+    await recordPexelsRequest(query, res.status, urls.length > 0);
+    return { urls, quotaExhausted: false, shouldCache: true };
   } catch (error) {
     await recordPexelsRequest(query, 0, false);
-    return null;
+    return { urls: [], quotaExhausted: false, shouldCache: false };
   }
 }
 
-async function searchPexels(query, alt = '', cache = new Map()) {
+async function getCandidateUrls(candidate, cache) {
+  if (!cache.has(candidate)) {
+    cache.set(candidate, (async () => {
+      const cachedUrls = await getCachedImageUrls(candidate);
+
+      if (cachedUrls !== null) {
+        return {
+          urls: cachedUrls,
+          quotaExhausted: false
+        };
+      }
+
+      const result = await fetchPexelsCandidateUrls(candidate);
+
+      if (result.shouldCache) {
+        await saveImageCache(candidate, result.urls);
+      }
+
+      return result;
+    })());
+  }
+
+  return cache.get(candidate);
+}
+
+function pickUrlForQuery(query, urls, selectionState) {
+  if (!Array.isArray(urls) || urls.length === 0) {
+    return null;
+  }
+
+  let remaining = selectionState.get(query);
+
+  if (!remaining || remaining.length === 0) {
+    remaining = [...urls];
+  }
+
+  const selectedIndex = Math.floor(Math.random() * remaining.length);
+  const [imageUrl] = remaining.splice(selectedIndex, 1);
+  selectionState.set(query, remaining);
+
+  return imageUrl || null;
+}
+
+async function searchPexels(query, alt = '', cache = new Map(), selectionState = new Map()) {
   const candidates = buildQueryCandidates(query, alt);
 
   for (const candidate of candidates) {
-    if (!cache.has(candidate)) {
-      cache.set(candidate, fetchPexelsCandidate(candidate));
-    }
-
-    const imageUrl = await cache.get(candidate);
+    const result = await getCandidateUrls(candidate, cache);
+    const imageUrl = pickUrlForQuery(candidate, result.urls, selectionState);
 
     if (imageUrl) {
       return imageUrl;
+    }
+
+    if (result.quotaExhausted) {
+      return null;
     }
   }
 
@@ -288,6 +413,7 @@ async function injectImages(html) {
   });
 
   const cache = new Map();
+  const selectionState = new Map();
   await Promise.all(
     imgs.map(async (el) => {
       const image = $(el);
@@ -299,7 +425,7 @@ async function injectImages(html) {
         return;
       }
 
-      const imageUrl = (await searchPexels(query, alt, cache)) || getFallbackImageUrl(query);
+      const imageUrl = (await searchPexels(query, alt, cache, selectionState)) || getFallbackImageUrl(query);
       image.attr('src', imageUrl).removeAttr('data-query');
     })
   );
@@ -313,5 +439,6 @@ module.exports = {
   searchPexels,
   buildQueryCandidates,
   getPexelsUsage,
-  injectImages
+  injectImages,
+  normalizeQuery
 };

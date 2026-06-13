@@ -60,7 +60,17 @@ export default function UsageMeter({ refreshKey = 0 }) {
         <div className="d-grid gap-3">
           {usage.map((item, index) => {
             const ratio = item.limit > 0 ? item.used / item.limit : 0;
-            const variant = ratio > 0.8 ? 'danger' : USAGE_VARIANTS[index % USAGE_VARIANTS.length];
+            const isUnavailable = item.available === false;
+            const variant = isUnavailable
+              ? 'secondary'
+              : ratio > 0.8
+                ? 'danger'
+                : USAGE_VARIANTS[index % USAGE_VARIANTS.length];
+            const statusLabel = item.status === 'saturated'
+              ? 'saturated - auto reactivation'
+              : item.status === 'disabled'
+                ? 'disabled'
+                : '';
 
             return (
               <div className="usage-meter-row" key={item.id}>
@@ -68,6 +78,7 @@ export default function UsageMeter({ refreshKey = 0 }) {
                   <span className="d-inline-flex align-items-center gap-2 fw-semibold">
                     <span className={`usage-meter-swatch bg-${variant}`} aria-hidden="true" />
                     {item.label}
+                    {statusLabel && <small className="muted-copy fw-normal">({statusLabel})</small>}
                   </span>
                   <span className="usage-meter-count">{item.used} / {item.limit}</span>
                 </div>

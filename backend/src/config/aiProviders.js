@@ -20,7 +20,8 @@ const AI_PROVIDERS = {
     baseURL: 'https://api.groq.com/openai/v1',
     apiKeyEnv: 'GROQ_API_KEY',
     model: 'llama-3.3-70b-versatile',
-    dailyLimit: 1000
+    dailyLimit: 1000,
+    supportsMultiPage: true
   },
   'mistral-large': {
     label: 'Mistral Large',
@@ -34,7 +35,8 @@ const AI_PROVIDERS = {
     baseURL: 'https://api.cerebras.ai/v1',
     apiKeyEnv: 'CEREBRAS_API_KEY',
     model: 'gpt-oss-120b',
-    dailyLimit: 150
+    dailyLimit: 150,
+    supportsMultiPage: true
   }
 };
 
