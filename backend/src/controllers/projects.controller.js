@@ -2,6 +2,9 @@ const db = require('../config/db');
 const { AI_PROVIDERS } = require('../config/aiProviders');
 const { AppError } = require('../middleware/errorHandler');
 const aiService = require('../services/ai.service');
+const { injectImages } = require('../services/image.service');
+const modelSettings = require('../services/modelSettings.service');
+const { recordAiUsage } = require('../services/usage.service');
 
 function parseStyleOptions(value) {
   if (!value) {
@@ -120,8 +123,17 @@ async function generateProject(req, res, next) {
       throw new AppError('Selected AI model is not available.', 400);
     }
 
+    if (!(await modelSettings.isModelEnabled(model))) {
+      throw new AppError('Selected AI model is disabled by an administrator.', 400);
+    }
+
+    const enabledModelIds = await modelSettings.getEnabledModelIds();
     const prompt = buildGenerationPrompt({ title, description, siteType, styleOptions });
-    const { code: generatedCode, modelUsed } = await aiService.generateSite(prompt, styleOptions, model);
+    const { code, modelUsed } = await aiService.generateSite(prompt, styleOptions, model, {
+      allowedModelIds: enabledModelIds
+    });
+    const generatedCode = await injectImages(code);
+    await recordAiUsage(modelUsed, 'generation');
     const result = await db.query(
       `INSERT INTO projects
         (user_id, title, description, site_type, prompt, model_used, style_options, generated_code)
@@ -185,6 +197,61 @@ async function updateProject(req, res, next) {
   }
 }
 
+async function reviseProject(req, res, next) {
+  try {
+    const { modification } = req.body;
+    const rows = await db.query(
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, style_options, generated_code, created_at, updated_at
+       FROM projects
+       WHERE id = ? AND user_id = ?
+       LIMIT 1`,
+      [req.params.id, req.user.id]
+    );
+
+    if (rows.length === 0) {
+      throw new AppError('Project not found.', 404);
+    }
+
+    const project = serializeProject(rows[0]);
+
+    if (!project.generatedCode) {
+      throw new AppError('This project has no generated HTML to revise.', 400);
+    }
+
+    const enabledModelIds = await modelSettings.getEnabledModelIds();
+    const { code, modelUsed } = await aiService.reviseSite(
+      project.generatedCode,
+      modification,
+      project.styleOptions || {},
+      project.modelUsed,
+      {
+        allowedModelIds: enabledModelIds
+      }
+    );
+    const generatedCode = await injectImages(code);
+    await recordAiUsage(modelUsed, 'revision');
+
+    await db.query(
+      'UPDATE projects SET generated_code = ?, model_used = ? WHERE id = ? AND user_id = ?',
+      [generatedCode, modelUsed, req.params.id, req.user.id]
+    );
+
+    const updatedRows = await db.query(
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, style_options, generated_code, created_at, updated_at
+       FROM projects
+       WHERE id = ? AND user_id = ?
+       LIMIT 1`,
+      [req.params.id, req.user.id]
+    );
+
+    return res.json({
+      project: serializeProject(updatedRows[0])
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function deleteProject(req, res, next) {
   try {
     const result = await db.query(
@@ -207,6 +274,7 @@ module.exports = {
   getProject,
   generateProject,
   updateProject,
+  reviseProject,
   deleteProject,
   serializeProject
 };

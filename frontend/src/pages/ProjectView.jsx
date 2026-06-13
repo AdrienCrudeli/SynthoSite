@@ -38,8 +38,10 @@ export default function ProjectView() {
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [editForm, setEditForm] = useState({ title: '', description: '' });
+  const [revisionRequest, setRevisionRequest] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRevising, setIsRevising] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [error, setError] = useState('');
@@ -104,6 +106,26 @@ export default function ProjectView() {
       setError(requestError.response?.data?.message || 'Unable to update this project.');
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleRevision(event) {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
+    setIsRevising(true);
+
+    try {
+      const response = await client.post(`/projects/${id}/revise`, {
+        modification: revisionRequest
+      });
+      setProject(response.data.project);
+      setRevisionRequest('');
+      setSuccess('Generated website updated.');
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to revise this generated website.');
+    } finally {
+      setIsRevising(false);
     }
   }
 
@@ -231,6 +253,50 @@ export default function ProjectView() {
                     </>
                   ) : (
                     'Save changes'
+                  )}
+                </Button>
+              </Form>
+            </Card.Body>
+          </Card>
+
+          <Card className="app-card mb-4">
+            <Card.Body className="p-4">
+              <h2 className="h5 fw-bold">Request a modification</h2>
+              <p className="muted-copy">
+                Describe the change to apply to the generated HTML, then SynthoSite will update the preview.
+              </p>
+
+              <Form onSubmit={handleRevision}>
+                <Form.Group className="mb-3" controlId="projectRevisionRequest">
+                  <Form.Label>Modification</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={4}
+                    value={revisionRequest}
+                    onChange={(event) => setRevisionRequest(event.target.value)}
+                    minLength={5}
+                    maxLength={1000}
+                    placeholder="Example: make the header darker and add a testimonials section."
+                    disabled={isRevising}
+                    required
+                  />
+                  <Form.Text className="muted-copy">
+                    {revisionRequest.length}/1000 characters
+                  </Form.Text>
+                </Form.Group>
+
+                <Button
+                  type="submit"
+                  className="btn-accent w-100"
+                  disabled={isRevising || revisionRequest.trim().length < 5}
+                >
+                  {isRevising ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Updating website...
+                    </>
+                  ) : (
+                    'Apply modification'
                   )}
                 </Button>
               </Form>

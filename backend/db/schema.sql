@@ -23,3 +23,28 @@ CREATE TABLE projects (
   INDEX idx_projects_user (user_id),
   INDEX idx_projects_type (site_type)
 );
+
+CREATE TABLE ai_model_settings (
+  model_id   VARCHAR(50) PRIMARY KEY,
+  enabled    TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ai_usage (
+  id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+  model_id     VARCHAR(50) NOT NULL,
+  request_type ENUM('generation','revision') NOT NULL DEFAULT 'generation',
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ai_usage_created_at (created_at),
+  INDEX idx_ai_usage_model (model_id)
+);
+
+CREATE TABLE pexels_usage (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  query       VARCHAR(255) NOT NULL,
+  status_code INT NOT NULL DEFAULT 0,
+  matched     TINYINT(1) NOT NULL DEFAULT 0,
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_pexels_usage_created_at (created_at),
+  INDEX idx_pexels_usage_query (query)
+);

@@ -16,11 +16,63 @@ jest.mock('openai', () => {
   }));
 });
 
-const { generateSite } = require('../src/services/ai.service');
+const { generateSite, reviseSite } = require('../src/services/ai.service');
 
 describe('AI service provider fallback', () => {
   beforeEach(() => {
     mockCreate.mockReset();
+  });
+
+  test('instructs providers to use data-query images and Pexels attribution', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: '<!doctype html><html><body>mustang</body></html>'
+          }
+        }
+      ]
+    });
+
+    await generateSite('Build a site about the Ford Mustang', {}, 'gemini-flash');
+
+    const systemPrompt = mockCreate.mock.calls[0][0].messages[0].content;
+    expect(systemPrompt).toContain('NEVER add a src attribute');
+    expect(systemPrompt).toContain('data-query="red ford mustang sports car"');
+    expect(systemPrompt).toContain('The src attribute will be injected automatically by the server');
+    expect(systemPrompt).toContain('Photos provided by Pexels');
+    expect(systemPrompt).toContain('https://www.pexels.com');
+    expect(systemPrompt).not.toContain('pollinations');
+    expect(systemPrompt).not.toContain('picsum');
+  });
+
+  test('sends the current HTML and requested change when revising a site', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: '<!doctype html><html><body>updated</body></html>'
+          }
+        }
+      ]
+    });
+
+    const result = await reviseSite(
+      '<!doctype html><html><body><header>Bright</header></body></html>',
+      'Make the header darker',
+      { primaryColor: '#14B8A6' },
+      'gemini-flash'
+    );
+
+    const userPrompt = mockCreate.mock.calls[0][0].messages[1].content;
+    expect(userPrompt).toContain('Current HTML:');
+    expect(userPrompt).toContain('<header>Bright</header>');
+    expect(userPrompt).toContain('Requested modification:');
+    expect(userPrompt).toContain('Make the header darker');
+    expect(result).toEqual({
+      code: '<!doctype html><html><body>updated</body></html>',
+      modelUsed: 'gemini-flash'
+    });
   });
 
   test('falls back to the next provider when the requested model returns 429', async () => {
@@ -47,28 +99,15 @@ describe('AI service provider fallback', () => {
     expect(mockCreate.mock.calls[1][0].model).toBe('llama-3.3-70b-versatile');
   });
 
-  test('falls back when the requested provider rejects an invalid key', async () => {
-    mockCreate
-      .mockRejectedValueOnce({ status: 401 })
-      .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: '<!doctype html><html><body>fallback</body></html>'
-            }
-          }
-        ]
-      });
+  test('surfaces selected provider auth errors instead of silently falling back', async () => {
+    mockCreate.mockRejectedValueOnce({ status: 401 });
 
-    const result = await generateSite('Build a site', {}, 'mistral-large');
+    await expect(generateSite('Build a site', {}, 'groq-llama')).rejects.toThrow(
+      'Groq Llama 3.3 70B rejected the API key. Update GROQ_API_KEY in backend/backend.env.'
+    );
 
-    expect(result).toEqual({
-      code: '<!doctype html><html><body>fallback</body></html>',
-      modelUsed: 'gemini-flash'
-    });
-    expect(mockCreate).toHaveBeenCalledTimes(2);
-    expect(mockCreate.mock.calls[0][0].model).toBe('mistral-large-latest');
-    expect(mockCreate.mock.calls[1][0].model).toBe('gemini-2.5-flash');
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate.mock.calls[0][0].model).toBe('llama-3.3-70b-versatile');
   });
 
   test('continues fallback order when a provider has a temporary server error', async () => {

@@ -6,7 +6,9 @@ import {
   Card,
   Col,
   Container,
+  Form,
   Modal,
+  ProgressBar,
   Row,
   Spinner,
   Table
@@ -28,8 +30,11 @@ export default function Admin() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [models, setModels] = useState([]);
+  const [pexelsUsage, setPexelsUsage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [togglingModelId, setTogglingModelId] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -37,21 +42,26 @@ export default function Admin() {
   const stats = useMemo(() => ({
     users: users.length,
     admins: users.filter((item) => item.role === 'admin').length,
-    projects: projects.length
-  }), [projects.length, users]);
+    projects: projects.length,
+    enabledModels: models.filter((item) => item.enabled).length
+  }), [models, projects.length, users]);
 
   async function loadAdminData() {
     setIsLoading(true);
     setError('');
 
     try {
-      const [usersResponse, projectsResponse] = await Promise.all([
+      const [usersResponse, projectsResponse, modelsResponse, usageResponse] = await Promise.all([
         client.get('/admin/users'),
-        client.get('/admin/projects')
+        client.get('/admin/projects'),
+        client.get('/admin/models'),
+        client.get('/admin/usage')
       ]);
 
       setUsers(usersResponse.data.users || []);
       setProjects(projectsResponse.data.projects || []);
+      setModels(modelsResponse.data.models || []);
+      setPexelsUsage(usageResponse.data.pexels || null);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to load admin data.');
     } finally {
@@ -98,6 +108,44 @@ export default function Admin() {
     }
   }
 
+  async function handleModelToggle(model, enabled) {
+    setError('');
+    setSuccess('');
+    setTogglingModelId(model.id);
+
+    try {
+      const response = await client.patch(`/admin/models/${model.id}`, { enabled });
+      const nextModel = response.data.model;
+
+      setModels((current) => current.map((item) => (
+        item.id === nextModel.id
+          ? {
+            ...item,
+            ...nextModel,
+            used: item.used
+          }
+          : item
+      )));
+      setSuccess(`${nextModel.label} is now ${nextModel.enabled ? 'enabled' : 'disabled'}.`);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to update this AI model.');
+    } finally {
+      setTogglingModelId('');
+    }
+  }
+
+  function getUsageVariant(item) {
+    const ratio = item.limit > 0 ? item.used / item.limit : 0;
+
+    if (ratio > 0.8) {
+      return 'danger';
+    }
+
+    return item.enabled === false ? 'secondary' : 'info';
+  }
+
+  const pexelsRatio = pexelsUsage?.limit > 0 ? pexelsUsage.used / pexelsUsage.limit : 0;
+
   return (
     <Container className="page-section">
       <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
@@ -117,7 +165,7 @@ export default function Admin() {
       {success && <Alert variant="success">{success}</Alert>}
 
       <Row className="g-4 mb-4">
-        <Col md={4}>
+        <Col md={6} xl={3}>
           <Card className="app-card admin-stat-card">
             <Card.Body>
               <p className="muted-copy mb-1">Users</p>
@@ -125,7 +173,7 @@ export default function Admin() {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={4}>
+        <Col md={6} xl={3}>
           <Card className="app-card admin-stat-card">
             <Card.Body>
               <p className="muted-copy mb-1">Admins</p>
@@ -133,11 +181,19 @@ export default function Admin() {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={4}>
+        <Col md={6} xl={3}>
           <Card className="app-card admin-stat-card">
             <Card.Body>
               <p className="muted-copy mb-1">Projects</p>
               <strong>{stats.projects}</strong>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col md={6} xl={3}>
+          <Card className="app-card admin-stat-card">
+            <Card.Body>
+              <p className="muted-copy mb-1">Active AI models</p>
+              <strong>{stats.enabledModels}</strong>
             </Card.Body>
           </Card>
         </Col>
@@ -149,8 +205,99 @@ export default function Admin() {
           <p className="muted-copy mt-3 mb-0">Loading admin data...</p>
         </div>
       ) : (
-        <Row className="g-4">
-          <Col xl={5}>
+        <>
+          <Row className="g-4 mb-4">
+            <Col xl={8}>
+              <Card className="app-card h-100">
+                <Card.Body className="p-4">
+                  <div className="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+                    <div>
+                      <h2 className="h4 fw-bold mb-1">AI model usage & access</h2>
+                      <p className="muted-copy mb-0">
+                        Disable a model to hide it from users and prevent new generations with it.
+                      </p>
+                    </div>
+                    <Badge bg="dark" className="align-self-md-start">
+                      {stats.enabledModels} enabled
+                    </Badge>
+                  </div>
+
+                  <div className="d-grid gap-3">
+                    {models.map((model) => {
+                      const variant = getUsageVariant(model);
+
+                      return (
+                        <div className="admin-model-row" key={model.id}>
+                          <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-2">
+                            <div>
+                              <div className="d-flex align-items-center gap-2">
+                                <strong>{model.label}</strong>
+                                <Badge bg={model.enabled ? 'success' : 'secondary'}>
+                                  {model.enabled ? 'Enabled' : 'Disabled'}
+                                </Badge>
+                              </div>
+                              <small className="muted-copy">{model.used} / {model.limit} generations today</small>
+                            </div>
+                            <Form.Check
+                              type="switch"
+                              id={`model-enabled-${model.id}`}
+                              label={model.enabled ? 'Available' : 'Blocked'}
+                              checked={model.enabled}
+                              disabled={Boolean(togglingModelId)}
+                              onChange={(event) => handleModelToggle(model, event.target.checked)}
+                            />
+                          </div>
+                          <ProgressBar
+                            now={model.used}
+                            max={model.limit || 1}
+                            variant={variant}
+                            aria-label={`${model.label}: ${model.used} / ${model.limit}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xl={4}>
+              <Card className="app-card h-100">
+                <Card.Body className="p-4">
+                  <h2 className="h4 fw-bold mb-1">Pexels usage</h2>
+                  <p className="muted-copy mb-3">
+                    Internal count of Pexels API calls made by image injection today.
+                  </p>
+
+                  {pexelsUsage ? (
+                    <>
+                      <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+                        <strong>{pexelsUsage.label}</strong>
+                        <span className="usage-meter-count">{pexelsUsage.used} / {pexelsUsage.limit}</span>
+                      </div>
+                      <ProgressBar
+                        now={pexelsUsage.used}
+                        max={pexelsUsage.limit || 1}
+                        variant={pexelsRatio > 0.8 ? 'danger' : 'success'}
+                        aria-label={`${pexelsUsage.label}: ${pexelsUsage.used} / ${pexelsUsage.limit}`}
+                      />
+                      <div className="d-flex flex-wrap gap-2 mt-3">
+                        <Badge bg="success">{pexelsUsage.matched} matched</Badge>
+                        <Badge bg="secondary">{pexelsUsage.fallback} fallback</Badge>
+                      </div>
+                    </>
+                  ) : (
+                    <Alert variant="warning" className="mb-0">
+                      Pexels usage is unavailable.
+                    </Alert>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
+          <Row className="g-4">
+            <Col xl={5}>
             <Card className="app-card">
               <Card.Body className="p-4">
                 <h2 className="h4 fw-bold mb-3">Users</h2>
@@ -200,9 +347,9 @@ export default function Admin() {
                 </Table>
               </Card.Body>
             </Card>
-          </Col>
+            </Col>
 
-          <Col xl={7}>
+            <Col xl={7}>
             <Card className="app-card">
               <Card.Body className="p-4">
                 <h2 className="h4 fw-bold mb-3">Projects</h2>
@@ -254,8 +401,9 @@ export default function Admin() {
                 </Table>
               </Card.Body>
             </Card>
-          </Col>
-        </Row>
+            </Col>
+          </Row>
+        </>
       )}
 
       <Modal show={Boolean(deleteTarget)} onHide={() => setDeleteTarget(null)} centered>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Button, Card, Col, Container, Form, Row } from 'react-bootstrap';
+import { CheckCircle2, Database, Sparkles, WandSparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client, { getModels, getUsage } from '../api/client';
 import UsageMeter from '../components/UsageMeter';
@@ -9,6 +10,41 @@ const SITE_TYPES = [
   { value: 'portfolio', label: 'Portfolio' },
   { value: 'blog', label: 'Blog' },
   { value: 'restaurant', label: 'Restaurant' }
+];
+
+const SURPRISE_PROMPTS = [
+  {
+    title: 'Moonlight Taco Lab',
+    description:
+      'A playful restaurant website for a late-night taco bar with a neon menu, chef story, spicy specials and customer quotes.',
+    siteType: 'restaurant',
+    primaryColor: '#F97316',
+    mood: 'bold, neon, fun and cinematic'
+  },
+  {
+    title: 'Retro Rocket Barber',
+    description:
+      'A polished business site for a vintage space-themed barber shop with services, booking call-to-action and a gallery.',
+    siteType: 'business',
+    primaryColor: '#2563EB',
+    mood: 'retro-futuristic, confident and clean'
+  },
+  {
+    title: 'Tiny Desk Jungle',
+    description:
+      'A portfolio for a plant-loving illustrator, with lush artwork sections, commissions, process notes and contact details.',
+    siteType: 'portfolio',
+    primaryColor: '#16A34A',
+    mood: 'organic, creative and bright'
+  },
+  {
+    title: 'Cafe Quantum',
+    description:
+      'A blog about science, coffee and curious experiments, with featured posts, newsletter signup and a warm editorial feel.',
+    siteType: 'blog',
+    primaryColor: '#8B5CF6',
+    mood: 'smart, cozy and imaginative'
+  }
 ];
 
 export default function Generate() {
@@ -69,21 +105,20 @@ export default function Generate() {
     }));
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  async function generateWebsite(nextFormData) {
     setError('');
     setIsGenerating(true);
 
     try {
       const response = await client.post('/projects/generate', {
-        title: formData.title,
-        description: formData.description,
-        siteType: formData.siteType,
-        model: formData.model,
+        title: nextFormData.title,
+        description: nextFormData.description,
+        siteType: nextFormData.siteType,
+        model: nextFormData.model,
         styleOptions: {
-          primaryColor: formData.primaryColor,
-          mood: formData.mood,
-          title: formData.title
+          primaryColor: nextFormData.primaryColor,
+          mood: nextFormData.mood,
+          title: nextFormData.title
         }
       });
 
@@ -100,10 +135,27 @@ export default function Generate() {
     }
   }
 
+  async function handleSubmit(event) {
+    event.preventDefault();
+    await generateWebsite(formData);
+  }
+
+  async function handleSurprise() {
+    const surprise = SURPRISE_PROMPTS[Math.floor(Math.random() * SURPRISE_PROMPTS.length)];
+    const nextFormData = {
+      ...formData,
+      ...surprise,
+      model: formData.model
+    };
+
+    setFormData(nextFormData);
+    await generateWebsite(nextFormData);
+  }
+
   return (
     <Container className="page-section">
       <Row className="g-4 align-items-start">
-        <Col lg={7}>
+        <Col lg={7} className="reveal-on-scroll">
           <Card className="app-card">
             <Card.Body className="p-4 p-md-5">
               <p className="hero-kicker mb-2">AI builder</p>
@@ -222,26 +274,36 @@ export default function Generate() {
                   />
                 </Form.Group>
 
-                <Button
-                  type="submit"
-                  className="btn-accent w-100 mt-2"
-                  disabled={isGenerating || isLoadingModels || !formData.model}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Spinner animation="border" size="sm" className="me-2" />
-                      Generation in progress...
-                    </>
-                  ) : (
-                    'Generate website'
-                  )}
-                </Button>
+                <div className="d-grid gap-2 mt-2">
+                  <Button
+                    type="submit"
+                    className="btn-accent"
+                    disabled={isGenerating || isLoadingModels || !formData.model}
+                  >
+                    {isGenerating ? (
+                      <>
+                        <WandSparkles size={16} className="me-2" />
+                        Generation in progress...
+                      </>
+                    ) : (
+                      'Generate website'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline-accent"
+                    onClick={handleSurprise}
+                    disabled={isGenerating || isLoadingModels || !formData.model}
+                  >
+                    Surprise me
+                  </Button>
+                </div>
               </Form>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col lg={5}>
+        <Col lg={5} className="reveal-on-scroll">
           <Card className="app-card sticky-lg-top generate-help-card">
             <Card.Body className="p-4">
               <h2 className="h5 fw-bold">What happens next?</h2>
@@ -256,6 +318,21 @@ export default function Generate() {
                   sandboxed iframe.
                 </p>
               </div>
+              {isGenerating && (
+                <div className="generation-flow mt-4" aria-live="polite">
+                  {[
+                    ['Analyze', Sparkles],
+                    ['Generate', WandSparkles],
+                    ['Save', Database],
+                    ['Ready', CheckCircle2]
+                  ].map(([label, Icon], index) => (
+                    <div className="generation-flow-step" style={{ animationDelay: `${index * 220}ms` }} key={label}>
+                      <Icon size={18} strokeWidth={2.2} />
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card.Body>
           </Card>
 

@@ -30,10 +30,10 @@ const AI_PROVIDERS = {
     dailyLimit: 100
   },
   'cerebras-llama': {
-    label: 'Cerebras Llama 3.3 70B',
+    label: 'Cerebras GPT-OSS 120B',
     baseURL: 'https://api.cerebras.ai/v1',
     apiKeyEnv: 'CEREBRAS_API_KEY',
-    model: 'llama-3.3-70b',
+    model: 'gpt-oss-120b',
     dailyLimit: 150
   }
 };

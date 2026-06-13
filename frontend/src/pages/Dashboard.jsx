@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
+import { FolderPlus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import ProjectCard from '../components/ProjectCard';
@@ -61,7 +62,7 @@ export default function Dashboard() {
 
   return (
     <Container className="page-section">
-      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4 reveal-on-scroll">
         <div>
           <p className="hero-kicker mb-2">Workspace</p>
           <h1 className="fw-bold mb-1">Your generated websites</h1>
@@ -72,7 +73,7 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      <div className="dashboard-toolbar p-3 p-md-4 mb-4">
+      <div className="dashboard-toolbar p-3 p-md-4 mb-4 reveal-on-scroll">
         <Row className="g-3">
           <Col lg={6}>
             <Form.Label className="fw-semibold">Search</Form.Label>
@@ -106,7 +107,7 @@ export default function Dashboard() {
 
       {error && <Alert variant="danger">{error}</Alert>}
 
-      <div className="mb-4">
+      <div className="mb-4 reveal-on-scroll">
         <UsageMeter />
       </div>
 
@@ -118,13 +119,16 @@ export default function Dashboard() {
       ) : projects.length > 0 ? (
         <Row className="g-4">
           {projects.map((project) => (
-            <Col md={6} xl={4} key={project.id}>
+            <Col md={6} xl={4} key={project.id} className="reveal-on-scroll">
               <ProjectCard project={project} />
             </Col>
           ))}
         </Row>
       ) : (
-        <Alert variant="light" className="app-card border-0 p-4">
+        <Alert variant="light" className="app-card empty-state border-0 p-4 reveal-on-scroll">
+          <div className="empty-state-icon" aria-hidden="true">
+            <FolderPlus size={34} strokeWidth={2} />
+          </div>
           <h2 className="h5 fw-bold">No projects found</h2>
           <p className="muted-copy mb-3">
             Adjust your filters or generate your first website from a prompt.

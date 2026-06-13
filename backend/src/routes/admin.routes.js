@@ -1,5 +1,5 @@
 const express = require('express');
-const { param } = require('express-validator');
+const { body, param } = require('express-validator');
 const adminController = require('../controllers/admin.controller');
 const { requireAdmin, verifyToken } = require('../middleware/auth');
 const validateRequest = require('../middleware/validateRequest');
@@ -31,5 +31,24 @@ router.delete(
   validateRequest,
   adminController.deleteProject
 );
+
+router.get('/models', adminController.listModels);
+
+router.patch(
+  '/models/:id',
+  [
+    param('id')
+      .trim()
+      .notEmpty()
+      .withMessage('Model id is required.'),
+    body('enabled')
+      .isBoolean()
+      .withMessage('Enabled must be a boolean.')
+  ],
+  validateRequest,
+  adminController.updateModel
+);
+
+router.get('/usage', adminController.getAdminUsage);
 
 module.exports = router;

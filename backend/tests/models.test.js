@@ -9,7 +9,12 @@ jest.mock('../src/config/db', () => ({
   query: jest.fn()
 }));
 
+jest.mock('../src/services/usage.service', () => ({
+  getAiUsageByModel: jest.fn()
+}));
+
 const db = require('../src/config/db');
+const usageService = require('../src/services/usage.service');
 const app = require('../src/app');
 
 function createToken(payload = { id: 12, role: 'user' }) {
@@ -19,9 +24,14 @@ function createToken(payload = { id: 12, role: 'user' }) {
 describe('Model routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    usageService.getAiUsageByModel.mockResolvedValue(new Map());
   });
 
   test('GET /api/models returns public model labels only', async () => {
+    db.query.mockResolvedValueOnce([
+      { model_id: 'mistral-large', enabled: 0 }
+    ]);
+
     const response = await request(app)
       .get('/api/models')
       .set('Authorization', `Bearer ${createToken()}`);
@@ -31,17 +41,17 @@ describe('Model routes', () => {
       { id: 'gemini-flash', label: 'Gemini 2.5 Flash' },
       { id: 'gemini-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
       { id: 'groq-llama', label: 'Groq Llama 3.3 70B' },
-      { id: 'mistral-large', label: 'Mistral Large' },
-      { id: 'cerebras-llama', label: 'Cerebras Llama 3.3 70B' }
+      { id: 'cerebras-llama', label: 'Cerebras GPT-OSS 120B' }
     ]);
     expect(JSON.stringify(response.body)).not.toContain('apiKey');
     expect(JSON.stringify(response.body)).not.toContain('baseURL');
   });
 
   test('GET /api/usage returns all registered models including zero usage', async () => {
-    db.query.mockResolvedValueOnce([
-      { model_used: 'gemini-flash', used_today: 2 }
-    ]);
+    usageService.getAiUsageByModel.mockResolvedValueOnce(new Map([
+      ['gemini-flash', 2]
+    ]));
+    db.query.mockResolvedValueOnce([]);
 
     const response = await request(app)
       .get('/api/usage')
@@ -53,7 +63,7 @@ describe('Model routes', () => {
       { id: 'gemini-flash-lite', label: 'Gemini 2.5 Flash-Lite', used: 0, limit: 1000 },
       { id: 'groq-llama', label: 'Groq Llama 3.3 70B', used: 0, limit: 1000 },
       { id: 'mistral-large', label: 'Mistral Large', used: 0, limit: 100 },
-      { id: 'cerebras-llama', label: 'Cerebras Llama 3.3 70B', used: 0, limit: 150 }
+      { id: 'cerebras-llama', label: 'Cerebras GPT-OSS 120B', used: 0, limit: 150 }
     ]);
   });
 });

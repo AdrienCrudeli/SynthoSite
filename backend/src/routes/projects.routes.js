@@ -100,6 +100,20 @@ router.put(
   projectsController.updateProject
 );
 
+router.post(
+  '/:id/revise',
+  generateLimiter,
+  projectIdValidator,
+  [
+    body('modification')
+      .trim()
+      .isLength({ min: 5, max: 1000 })
+      .withMessage('Modification request must be between 5 and 1000 characters.')
+  ],
+  validateRequest,
+  projectsController.reviseProject
+);
+
 router.delete(
   '/:id',
   projectIdValidator,

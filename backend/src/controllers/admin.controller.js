@@ -1,5 +1,9 @@
 const db = require('../config/db');
+const { AI_PROVIDERS } = require('../config/aiProviders');
 const { AppError } = require('../middleware/errorHandler');
+const { getPexelsUsage } = require('../services/image.service');
+const modelSettings = require('../services/modelSettings.service');
+const { getAiUsageByModel } = require('../services/usage.service');
 
 function serializeAdminUser(row) {
   return {
@@ -116,9 +120,65 @@ async function deleteProject(req, res, next) {
   }
 }
 
+async function listModels(req, res, next) {
+  try {
+    const [models, usageByModel] = await Promise.all([
+      modelSettings.listModels({ includeDisabled: true }),
+      getAiUsageByModel()
+    ]);
+
+    return res.json({
+      models: models.map((model) => ({
+        ...model,
+        used: usageByModel.get(model.id) || 0
+      }))
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function updateModel(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!AI_PROVIDERS[id]) {
+      throw new AppError('AI model not found.', 404);
+    }
+
+    const enabled = Boolean(req.body.enabled);
+    const enabledModelIds = await modelSettings.getEnabledModelIds();
+
+    if (!enabled && enabledModelIds.length <= 1 && enabledModelIds.includes(id)) {
+      throw new AppError('At least one AI model must remain enabled.', 400);
+    }
+
+    const model = await modelSettings.setModelEnabled(id, enabled);
+
+    return res.json({
+      model
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function getAdminUsage(req, res, next) {
+  try {
+    return res.json({
+      pexels: await getPexelsUsage()
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listUsers,
   deleteUser,
   listProjects,
-  deleteProject
+  deleteProject,
+  listModels,
+  updateModel,
+  getAdminUsage
 };
