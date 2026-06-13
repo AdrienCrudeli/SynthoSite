@@ -1,8 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="100%" height="100%">
-  <rect x="10" y="15" width="50" height="50" rx="12" fill="#14B8A6" />
-  <text x="35" y="50" font-family="system-ui, -apple-system, sans-serif" font-size="32" fill="#F8FAFC" text-anchor="middle" font-weight="bold">S</text>
-  
-  <text x="75" y="52" font-family="system-ui, -apple-system, sans-serif" font-size="36">
-    <tspan fill="#1E293B" font-weight="normal">Syntho</tspan><tspan fill="#14B8A6" font-weight="bold">Site</tspan>
-  </text>
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="300" height="80">
+	<defs>
+		<image  width="123" height="36" id="img1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAAAkBAMAAABbMVhuAAAAAXNSR0IB2cksfwAAABVQTFRFAAAA/////f39/v7+/v7+/Pz8////erXtGwAAAAd0Uk5TAP+Gk4WG+Bmy1mQAAAGMSURBVHicrZXtccMgDIZFzu2fNmcYoRPkOkFGyHWEbpZskBE8iv/3WtwJXIE+wB+JsVMuR3SI5wUkhA2UNgd+OmjwZ4Mx4yvCib7DM3cDd/AILotvxB2Bs84ivO9ugQ/hxtbtCHe7b3ZW+0NDuIqyidHwxva/GBRU5tj0HXpDlD1PJTNfnU1Eu5TNDGcD5KoE8Ske/gRXS3EOtIg7UD4sG311aywRYUDPDuFQccuWdLGL6iRAvmpPW6Zz+xz3vEMZFxxk255FaMKuHuBhznuLPZkxxBIbDyotHZODvEdHjqc40HDSuIPLiBlkkXx4W1bhUYBDEiO3FgfNkaSmCD+O8dPFUljWrU7zP6+9gS245ALxUGdL+OkM8PwyxfkGFOfdSZHy/DLc/AC8dQHnmCmuRZvw6muIZyUjdUhLoOIMDvxciAPvRmyHRnEtOnqEMpxrMsMxQ7yiSe8K4x5GOHw0Yzxdc1JPL8by1yq0p1eA4zXieWPx4jbCl1/9Bbxo77O43rnt+Lq9/zO+koY/e8I8hF2kIqgAAAAASUVORK5CYII="/>
+	</defs>
+	<style>
+		tspan { white-space:pre } 
+		.s0 { fill: #14b8a6 } 
+		.t1 { font-size: 32px;fill: #f8fafc;font-family: "system" } 
+		.t2 { font-size: 36px;fill: #14b8a6;font-family: "system" } 
+	</style>
+	<path fill-rule="evenodd" class="s0" d="m22 15h26c6.63 0 12 5.37 12 12v26c0 6.63-5.37 12-12 12h-26c-6.63 0-12-5.37-12-12v-26c0-6.63 5.37-12 12-12z"/>
+	<text id="S" transform="translate(35,50)">
+		<tspan x="-10.2" y="0" class="t1">S
+</tspan>
+	</text>
+	<g>
+		<g id="Syntho">
+			<use id="Syntho" href="#img1" x="68" y="22"/>
+		</g>
+		<text id="Site" transform="translate(194,50)">
+			<tspan x="0" y="0" class="t2">Site
+</tspan>
+		</text>
+	</g>
 </svg>

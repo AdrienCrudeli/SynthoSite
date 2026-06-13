@@ -1,0 +1,24 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="300" height="80">
+	<style>
+		tspan { white-space:pre } 
+		.s0 { fill: #14b8a6 } 
+		.t1 { font-size: 32px;fill: #f8fafc;font-family: "system" } 
+		.t2 { font-size: 36px;fill: #ffffff;font-family: "system" } 
+		.t3 { font-size: 36px;fill: #14b8a6;font-family: "system" } 
+	</style>
+	<path fill-rule="evenodd" class="s0" d="m22 15h26c6.63 0 12 5.37 12 12v26c0 6.63-5.37 12-12 12h-26c-6.63 0-12-5.37-12-12v-26c0-6.63 5.37-12 12-12z"/>
+	<text id="S" transform="translate(35,50)">
+		<tspan x="-10.2" y="0" class="t1">S
+</tspan>
+	</text>
+	<g>
+		<text id="Syntho" transform="translate(68,50)">
+			<tspan x="0" y="0" class="t2">Syntho
+</tspan>
+		</text>
+		<text id="Site" transform="translate(198,50)">
+			<tspan x="0" y="0" class="t3">Site
+</tspan>
+		</text>
+	</g>
+</svg>

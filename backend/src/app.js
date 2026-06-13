@@ -11,6 +11,7 @@ const publicRoutes = require('./routes/public.routes');
 const { AppError, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
+app.set('trust proxy', 1);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
