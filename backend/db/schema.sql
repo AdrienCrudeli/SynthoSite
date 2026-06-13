@@ -15,6 +15,9 @@ CREATE TABLE projects (
   site_type      VARCHAR(50),
   prompt         TEXT NOT NULL,
   model_used     VARCHAR(50),
+  is_public      TINYINT(1) NOT NULL DEFAULT 0,
+  view_count     INT NOT NULL DEFAULT 0,
+  like_count     INT NOT NULL DEFAULT 0,
   style_options  JSON,
   generated_code LONGTEXT,
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -22,6 +25,31 @@ CREATE TABLE projects (
   CONSTRAINT fk_projects_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_projects_user (user_id),
   INDEX idx_projects_type (site_type)
+);
+
+CREATE TABLE project_likes (
+  id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  visitor_id VARCHAR(80) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_project_likes_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_project_likes_visitor (project_id, visitor_id),
+  INDEX idx_project_likes_project (project_id)
+);
+
+CREATE TABLE project_versions (
+  id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+  project_id     INT NOT NULL,
+  version_number INT NOT NULL,
+  label          VARCHAR(120),
+  change_summary VARCHAR(500),
+  model_used     VARCHAR(50),
+  generated_code LONGTEXT NOT NULL,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_project_versions_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_project_versions_number (project_id, version_number),
+  INDEX idx_project_versions_project (project_id),
+  INDEX idx_project_versions_created_at (created_at)
 );
 
 CREATE TABLE ai_model_settings (

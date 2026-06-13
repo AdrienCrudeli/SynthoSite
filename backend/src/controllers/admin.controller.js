@@ -25,8 +25,37 @@ function serializeAdminProject(row) {
     title: row.title,
     description: row.description,
     siteType: row.site_type,
+    isPublic: Boolean(row.is_public),
+    viewCount: Number(row.view_count || 0),
+    likeCount: Number(row.like_count || 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function parseStyleOptions(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  }
+}
+
+function serializeAdminProjectDetails(row) {
+  return {
+    ...serializeAdminProject(row),
+    prompt: row.prompt,
+    modelUsed: row.model_used,
+    styleOptions: parseStyleOptions(row.style_options),
+    generatedCode: row.generated_code
   };
 }
 
@@ -88,6 +117,9 @@ async function listProjects(req, res, next) {
          p.title,
          p.description,
          p.site_type,
+         p.is_public,
+         p.view_count,
+         p.like_count,
          p.created_at,
          p.updated_at
        FROM projects p
@@ -97,6 +129,45 @@ async function listProjects(req, res, next) {
 
     return res.json({
       projects: rows.map(serializeAdminProject)
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function getProject(req, res, next) {
+  try {
+    const rows = await db.query(
+      `SELECT
+         p.id,
+         p.user_id,
+         u.username AS owner_username,
+         u.email AS owner_email,
+         p.title,
+         p.description,
+         p.site_type,
+         p.prompt,
+         p.model_used,
+         p.is_public,
+         p.view_count,
+         p.like_count,
+         p.style_options,
+         p.generated_code,
+         p.created_at,
+         p.updated_at
+       FROM projects p
+       INNER JOIN users u ON u.id = p.user_id
+       WHERE p.id = ?
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    if (rows.length === 0) {
+      throw new AppError('Project not found.', 404);
+    }
+
+    return res.json({
+      project: serializeAdminProjectDetails(rows[0])
     });
   } catch (error) {
     return next(error);
@@ -177,6 +248,7 @@ module.exports = {
   listUsers,
   deleteUser,
   listProjects,
+  getProject,
   deleteProject,
   listModels,
   updateModel,

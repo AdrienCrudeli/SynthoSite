@@ -66,6 +66,10 @@ router.post(
       .trim()
       .notEmpty()
       .withMessage('AI model is required.'),
+    body('isPublic')
+      .optional({ nullable: true })
+      .isBoolean()
+      .withMessage('Public visibility must be a boolean.'),
     body('styleOptions')
       .optional({ nullable: true })
       .isObject()
@@ -100,6 +104,18 @@ router.put(
   projectsController.updateProject
 );
 
+router.patch(
+  '/:id/visibility',
+  projectIdValidator,
+  [
+    body('isPublic')
+      .isBoolean()
+      .withMessage('Public visibility must be a boolean.')
+  ],
+  validateRequest,
+  projectsController.updateVisibility
+);
+
 router.post(
   '/:id/revise',
   generateLimiter,
@@ -112,6 +128,27 @@ router.post(
   ],
   validateRequest,
   projectsController.reviseProject
+);
+
+router.get(
+  '/:id/versions',
+  projectIdValidator,
+  validateRequest,
+  projectsController.listProjectVersions
+);
+
+router.post(
+  '/:id/versions/:versionId/restore',
+  [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Project id must be a positive integer.'),
+    param('versionId')
+      .isInt({ min: 1 })
+      .withMessage('Version id must be a positive integer.')
+  ],
+  validateRequest,
+  projectsController.restoreProjectVersion
 );
 
 router.delete(

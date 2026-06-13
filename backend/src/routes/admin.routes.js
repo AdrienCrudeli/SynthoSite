@@ -25,6 +25,13 @@ router.delete(
 
 router.get('/projects', adminController.listProjects);
 
+router.get(
+  '/projects/:id',
+  idValidator,
+  validateRequest,
+  adminController.getProject
+);
+
 router.delete(
   '/projects/:id',
   idValidator,

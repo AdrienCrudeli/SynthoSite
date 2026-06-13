@@ -53,6 +53,7 @@ export default function Generate() {
     description: '',
     siteType: 'business',
     model: '',
+    isPublic: false,
     primaryColor: '#14B8A6',
     mood: 'modern, trustworthy and polished'
   });
@@ -115,6 +116,7 @@ export default function Generate() {
         description: nextFormData.description,
         siteType: nextFormData.siteType,
         model: nextFormData.model,
+        isPublic: nextFormData.isPublic,
         styleOptions: {
           primaryColor: nextFormData.primaryColor,
           mood: nextFormData.mood,
@@ -273,6 +275,20 @@ export default function Generate() {
                     disabled={isGenerating}
                   />
                 </Form.Group>
+
+                <Form.Check
+                  className="mb-3"
+                  type="switch"
+                  id="generateIsPublic"
+                  name="isPublic"
+                  label="Publish this site immediately"
+                  checked={formData.isPublic}
+                  onChange={(event) => setFormData((current) => ({
+                    ...current,
+                    isPublic: event.target.checked
+                  }))}
+                  disabled={isGenerating}
+                />
 
                 <div className="d-grid gap-2 mt-2">
                   <Button

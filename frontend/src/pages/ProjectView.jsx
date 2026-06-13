@@ -37,11 +37,14 @@ export default function ProjectView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
+  const [versions, setVersions] = useState([]);
   const [editForm, setEditForm] = useState({ title: '', description: '' });
   const [revisionRequest, setRevisionRequest] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRevising, setIsRevising] = useState(false);
+  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [restoringVersionId, setRestoringVersionId] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [error, setError] = useState('');
@@ -57,11 +60,15 @@ export default function ProjectView() {
       setError('');
 
       try {
-        const response = await client.get(`/projects/${id}`);
+        const [projectResponse, versionsResponse] = await Promise.all([
+          client.get(`/projects/${id}`),
+          client.get(`/projects/${id}/versions`)
+        ]);
 
         if (isCurrent) {
-          const nextProject = response.data.project;
+          const nextProject = projectResponse.data.project;
           setProject(nextProject);
+          setVersions(versionsResponse.data.versions || []);
           setEditForm({
             title: nextProject.title || '',
             description: nextProject.description || ''
@@ -109,6 +116,22 @@ export default function ProjectView() {
     }
   }
 
+  async function handleVisibilityChange(isPublic) {
+    setError('');
+    setSuccess('');
+    setIsUpdatingVisibility(true);
+
+    try {
+      const response = await client.patch(`/projects/${id}/visibility`, { isPublic });
+      setProject(response.data.project);
+      setSuccess(isPublic ? 'Project is now public.' : 'Project is now private.');
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to update project visibility.');
+    } finally {
+      setIsUpdatingVisibility(false);
+    }
+  }
+
   async function handleRevision(event) {
     event.preventDefault();
     setError('');
@@ -121,11 +144,29 @@ export default function ProjectView() {
       });
       setProject(response.data.project);
       setRevisionRequest('');
+      const versionsResponse = await client.get(`/projects/${id}/versions`);
+      setVersions(versionsResponse.data.versions || []);
       setSuccess('Generated website updated.');
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to revise this generated website.');
     } finally {
       setIsRevising(false);
+    }
+  }
+
+  async function handleRestoreVersion(version) {
+    setError('');
+    setSuccess('');
+    setRestoringVersionId(version.id);
+
+    try {
+      const response = await client.post(`/projects/${id}/versions/${version.id}/restore`);
+      setProject(response.data.project);
+      setSuccess(`Restored version ${version.versionNumber}.`);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to restore this version.');
+    } finally {
+      setRestoringVersionId('');
     }
   }
 
@@ -172,6 +213,9 @@ export default function ProjectView() {
             <h1 className="fw-bold mb-0">{project.title}</h1>
             <Badge className="type-badge text-capitalize">{project.siteType || 'website'}</Badge>
             {project.modelUsed && <Badge bg="info">{project.modelUsed}</Badge>}
+            <Badge bg={project.isPublic ? 'success' : 'secondary'}>
+              {project.isPublic ? 'Public' : 'Private'}
+            </Badge>
           </div>
           <p className="muted-copy mt-2 mb-0">{project.description || 'No description yet.'}</p>
         </div>
@@ -179,7 +223,13 @@ export default function ProjectView() {
           <Button as={Link} to="/dashboard" variant="outline-secondary">
             Dashboard
           </Button>
-          <Button href={publicUrl} target="_blank" rel="noreferrer" variant="outline-accent">
+          <Button
+            href={project.isPublic ? publicUrl : undefined}
+            target="_blank"
+            rel="noreferrer"
+            variant="outline-accent"
+            disabled={!project.isPublic}
+          >
             View online
           </Button>
           <Button
@@ -307,9 +357,23 @@ export default function ProjectView() {
             <Card.Body className="p-4">
               <h2 className="h5 fw-bold">Share URL</h2>
               <p className="muted-copy">
-                Public visitors can open the generated website without logging in.
+                Public visitors can open this URL only when the project is public.
               </p>
+              <Form.Check
+                className="mb-3"
+                type="switch"
+                id="projectIsPublic"
+                label={project.isPublic ? 'Public project' : 'Private project'}
+                checked={Boolean(project.isPublic)}
+                disabled={isUpdatingVisibility}
+                onChange={(event) => handleVisibilityChange(event.target.checked)}
+              />
               <Form.Control value={publicUrl} readOnly className="mb-3" />
+              {!project.isPublic && (
+                <Alert variant="secondary" className="py-2 small">
+                  This link is disabled while the project is private.
+                </Alert>
+              )}
               <Button
                 variant="outline-danger"
                 className="w-100"
@@ -317,6 +381,40 @@ export default function ProjectView() {
               >
                 Delete project
               </Button>
+            </Card.Body>
+          </Card>
+
+          <Card className="app-card mt-4">
+            <Card.Body className="p-4">
+              <h2 className="h5 fw-bold">Version history</h2>
+              <p className="muted-copy">
+                Restore a previous generated HTML version without deleting newer versions.
+              </p>
+
+              <div className="d-grid gap-3">
+                {versions.map((version) => (
+                  <div className="version-row" key={version.id}>
+                    <div>
+                      <strong>Version {version.versionNumber}</strong>
+                      <span>{version.label || 'Saved version'}</span>
+                      <small>{version.changeSummary || 'No change summary.'}</small>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline-accent"
+                      disabled={Boolean(restoringVersionId)}
+                      onClick={() => handleRestoreVersion(version)}
+                    >
+                      {restoringVersionId === version.id ? 'Restoring...' : 'Restore'}
+                    </Button>
+                  </div>
+                ))}
+                {versions.length === 0 && (
+                  <Alert variant="light" className="mb-0">
+                    No saved versions yet.
+                  </Alert>
+                )}
+              </div>
             </Card.Body>
           </Card>
         </Col>

@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [sort, setSort] = useState('recent');
   const [type, setType] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [togglingProjectId, setTogglingProjectId] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -59,6 +60,24 @@ export default function Dashboard() {
       window.clearTimeout(timeoutId);
     };
   }, [search, sort, type]);
+
+  async function handleToggleVisibility(project, isPublic) {
+    setError('');
+    setTogglingProjectId(project.id);
+
+    try {
+      const response = await client.patch(`/projects/${project.id}/visibility`, { isPublic });
+      const nextProject = response.data.project;
+
+      setProjects((current) => current.map((item) => (
+        item.id === nextProject.id ? { ...item, ...nextProject } : item
+      )));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to update project visibility.');
+    } finally {
+      setTogglingProjectId('');
+    }
+  }
 
   return (
     <Container className="page-section">
@@ -120,7 +139,11 @@ export default function Dashboard() {
         <Row className="g-4">
           {projects.map((project) => (
             <Col md={6} xl={4} key={project.id} className="reveal-on-scroll">
-              <ProjectCard project={project} />
+              <ProjectCard
+                project={project}
+                onToggleVisibility={handleToggleVisibility}
+                isToggling={togglingProjectId === project.id}
+              />
             </Col>
           ))}
         </Row>

@@ -12,7 +12,9 @@ import Dashboard from './pages/Dashboard';
 import Generate from './pages/Generate';
 import ProjectView from './pages/ProjectView';
 import Admin from './pages/Admin';
+import AdminProjectView from './pages/AdminProjectView';
 import About from './pages/About';
+import PublicGallery from './pages/PublicGallery';
 
 export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('synthosite_theme') || 'light');
@@ -36,6 +38,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/about" element={<About />} />
+          <Route path="/gallery" element={<PublicGallery />} />
           <Route
             path="/dashboard"
             element={
@@ -65,6 +68,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <Admin />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/projects/:id"
+            element={
+              <AdminRoute>
+                <AdminProjectView />
               </AdminRoute>
             }
           />

@@ -55,6 +55,7 @@ describe('Project routes', () => {
         site_type: 'business',
         prompt: 'Create a business website.',
         model_used: 'gemini-flash',
+        is_public: 0,
         style_options: '{"primaryColor":"#14B8A6","mood":"premium"}',
         created_at: '2026-06-01 10:00:00',
         updated_at: '2026-06-01 10:00:00'
@@ -73,6 +74,7 @@ describe('Project routes', () => {
       title: 'Studio Landing Page',
       siteType: 'business',
       modelUsed: 'gemini-flash',
+      isPublic: false,
       styleOptions: {
         primaryColor: '#14B8A6',
         mood: 'premium'
@@ -93,7 +95,9 @@ describe('Project routes', () => {
     db.query
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce({ insertId: 9 });
+      .mockResolvedValueOnce({ insertId: 9 })
+      .mockResolvedValueOnce([{ next_version: 1 }])
+      .mockResolvedValueOnce({ insertId: 20 });
 
     const response = await request(app)
       .post('/api/projects/generate')
@@ -103,6 +107,7 @@ describe('Project routes', () => {
         description: 'Ford Mustang presentation website',
         siteType: 'business',
         model: 'gemini-flash',
+        isPublic: true,
         styleOptions: {
           primaryColor: '#14B8A6',
           mood: 'premium'
@@ -131,10 +136,13 @@ describe('Project routes', () => {
       '<!doctype html><html><body><img data-query="red ford mustang sports car" alt="Ford Mustang" width="1200" height="600" /></body></html>'
     );
     expect(usageService.recordAiUsage).toHaveBeenCalledWith('gemini-flash', 'generation');
-    expect(db.query.mock.calls[2][1][7]).toBe(
+    expect(db.query.mock.calls[2][1][6]).toBe(1);
+    expect(db.query.mock.calls[2][1][8]).toBe(
       '<!doctype html><html><body><img src="https://images.pexels.com/photos/mustang.jpeg" alt="Ford Mustang" width="1200" height="600" /></body></html>'
     );
+    expect(db.query.mock.calls[4][0]).toContain('INSERT INTO project_versions');
     expect(response.body.project.generatedCode).toContain('https://images.pexels.com/photos/mustang.jpeg');
+    expect(response.body.project.isPublic).toBe(true);
   });
 
   test('POST /api/projects/generate rejects disabled models', async () => {
@@ -169,6 +177,7 @@ describe('Project routes', () => {
           site_type: 'business',
           prompt: 'Create a business website.',
           model_used: 'gemini-flash',
+          is_public: 0,
           style_options: '{"primaryColor":"#14B8A6"}',
           generated_code: '<!doctype html><html><body><header>Bright</header></body></html>',
           created_at: '2026-06-01 10:00:00',
@@ -177,6 +186,8 @@ describe('Project routes', () => {
       ])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce({ affectedRows: 1 })
+      .mockResolvedValueOnce([{ next_version: 2 }])
+      .mockResolvedValueOnce({ insertId: 22 })
       .mockResolvedValueOnce([
         {
           id: 7,
@@ -186,6 +197,7 @@ describe('Project routes', () => {
           site_type: 'business',
           prompt: 'Create a business website.',
           model_used: 'groq-llama',
+          is_public: 0,
           style_options: '{"primaryColor":"#14B8A6"}',
           generated_code: '<!doctype html><html><body><header>Dark</header><img src="https://images.pexels.com/photos/dark.jpeg" alt="Dark header" /></body></html>',
           created_at: '2026-06-01 10:00:00',
@@ -234,11 +246,131 @@ describe('Project routes', () => {
         12
       ]
     ]);
+    expect(db.query.mock.calls[4][0]).toContain('INSERT INTO project_versions');
+    expect(db.query.mock.calls[4][1]).toEqual([
+      '7',
+      2,
+      'Prompt revision',
+      'Make the header darker',
+      'groq-llama',
+      '<!doctype html><html><body><header>Dark</header><img src="https://images.pexels.com/photos/dark.jpeg" alt="Dark header" /></body></html>'
+    ]);
     expect(response.body.project).toMatchObject({
       id: 7,
       userId: 12,
       modelUsed: 'groq-llama',
       generatedCode: '<!doctype html><html><body><header>Dark</header><img src="https://images.pexels.com/photos/dark.jpeg" alt="Dark header" /></body></html>'
     });
+  });
+
+  test('PATCH /api/projects/:id/visibility toggles public sharing for the owner', async () => {
+    db.query
+      .mockResolvedValueOnce({ affectedRows: 1 })
+      .mockResolvedValueOnce([
+        {
+          id: 7,
+          user_id: 12,
+          title: 'Mustang Showcase',
+          description: 'A car website.',
+          site_type: 'business',
+          prompt: 'Create a business website.',
+          model_used: 'gemini-flash',
+          is_public: 1,
+          style_options: '{"primaryColor":"#14B8A6"}',
+          generated_code: '<!doctype html><html><body>ok</body></html>',
+          created_at: '2026-06-01 10:00:00',
+          updated_at: '2026-06-01 10:05:00'
+        }
+      ]);
+
+    const response = await request(app)
+      .patch('/api/projects/7/visibility')
+      .set('Authorization', `Bearer ${createToken()}`)
+      .send({ isPublic: true });
+
+    expect(response.status).toBe(200);
+    expect(db.query.mock.calls[0]).toEqual([
+      'UPDATE projects SET is_public = ? WHERE id = ? AND user_id = ?',
+      [1, '7', 12]
+    ]);
+    expect(response.body.project.isPublic).toBe(true);
+  });
+
+  test('GET /api/projects/:id/versions lists version history for the owner', async () => {
+    db.query.mockResolvedValueOnce([
+      {
+        id: 22,
+        project_id: 7,
+        version_number: 2,
+        label: 'Prompt revision',
+        change_summary: 'Make the header darker',
+        model_used: 'groq-llama',
+        created_at: '2026-06-01 10:05:00'
+      }
+    ]);
+
+    const response = await request(app)
+      .get('/api/projects/7/versions')
+      .set('Authorization', `Bearer ${createToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.versions).toEqual([
+      {
+        id: 22,
+        projectId: 7,
+        versionNumber: 2,
+        label: 'Prompt revision',
+        changeSummary: 'Make the header darker',
+        modelUsed: 'groq-llama',
+        createdAt: '2026-06-01 10:05:00'
+      }
+    ]);
+  });
+
+  test('POST /api/projects/:id/versions/:versionId/restore restores generated HTML', async () => {
+    db.query
+      .mockResolvedValueOnce([
+        {
+          id: 21,
+          project_id: 7,
+          version_number: 1,
+          generated_code: '<!doctype html><html><body>old</body></html>',
+          model_used: 'gemini-flash'
+        }
+      ])
+      .mockResolvedValueOnce({ affectedRows: 1 })
+      .mockResolvedValueOnce([
+        {
+          id: 7,
+          user_id: 12,
+          title: 'Mustang Showcase',
+          description: 'A car website.',
+          site_type: 'business',
+          prompt: 'Create a business website.',
+          model_used: 'gemini-flash',
+          is_public: 0,
+          style_options: '{"primaryColor":"#14B8A6"}',
+          generated_code: '<!doctype html><html><body>old</body></html>',
+          created_at: '2026-06-01 10:00:00',
+          updated_at: '2026-06-01 10:10:00'
+        }
+      ]);
+
+    const response = await request(app)
+      .post('/api/projects/7/versions/21/restore')
+      .set('Authorization', `Bearer ${createToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(db.query.mock.calls[1]).toEqual([
+      'UPDATE projects SET generated_code = ?, model_used = ? WHERE id = ? AND user_id = ?',
+      [
+        '<!doctype html><html><body>old</body></html>',
+        'gemini-flash',
+        '7',
+        12
+      ]
+    ]);
+    expect(response.body.project.generatedCode).toBe('<!doctype html><html><body>old</body></html>');
+    expect(response.body.restoredVersion.versionNumber).toBe(1);
   });
 });

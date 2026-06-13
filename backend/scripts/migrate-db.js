@@ -26,6 +26,99 @@ async function main() {
     console.log('Migration skipped: projects.model_used already exists.');
   }
 
+  const [visibilityColumns] = await connection.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'projects' AND COLUMN_NAME = 'is_public'`,
+    [process.env.DB_NAME]
+  );
+
+  if (visibilityColumns.length === 0) {
+    await connection.execute('ALTER TABLE projects ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 0 AFTER model_used');
+    console.log('Migration applied: projects.is_public added.');
+  } else {
+    console.log('Migration skipped: projects.is_public already exists.');
+  }
+
+  const [viewCountColumns] = await connection.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'projects' AND COLUMN_NAME = 'view_count'`,
+    [process.env.DB_NAME]
+  );
+
+  if (viewCountColumns.length === 0) {
+    await connection.execute('ALTER TABLE projects ADD COLUMN view_count INT NOT NULL DEFAULT 0 AFTER is_public');
+    console.log('Migration applied: projects.view_count added.');
+  } else {
+    console.log('Migration skipped: projects.view_count already exists.');
+  }
+
+  const [likeCountColumns] = await connection.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'projects' AND COLUMN_NAME = 'like_count'`,
+    [process.env.DB_NAME]
+  );
+
+  if (likeCountColumns.length === 0) {
+    await connection.execute('ALTER TABLE projects ADD COLUMN like_count INT NOT NULL DEFAULT 0 AFTER view_count');
+    console.log('Migration applied: projects.like_count added.');
+  } else {
+    console.log('Migration skipped: projects.like_count already exists.');
+  }
+
+  await connection.execute(
+    `CREATE TABLE IF NOT EXISTS project_likes (
+      id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+      project_id INT NOT NULL,
+      visitor_id VARCHAR(80) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_project_likes_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      UNIQUE KEY uq_project_likes_visitor (project_id, visitor_id),
+      INDEX idx_project_likes_project (project_id)
+    )`
+  );
+  console.log('Migration applied: project_likes table ensured.');
+
+  await connection.execute(
+    `CREATE TABLE IF NOT EXISTS project_versions (
+      id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+      project_id     INT NOT NULL,
+      version_number INT NOT NULL,
+      label          VARCHAR(120),
+      change_summary VARCHAR(500),
+      model_used     VARCHAR(50),
+      generated_code LONGTEXT NOT NULL,
+      created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_project_versions_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      UNIQUE KEY uq_project_versions_number (project_id, version_number),
+      INDEX idx_project_versions_project (project_id),
+      INDEX idx_project_versions_created_at (created_at)
+    )`
+  );
+  console.log('Migration applied: project_versions table ensured.');
+
+  await connection.execute(
+    `INSERT INTO project_versions
+      (project_id, version_number, label, change_summary, model_used, generated_code)
+     SELECT
+       p.id,
+       1,
+       'Current version',
+       'Backfilled from existing generated HTML.',
+       p.model_used,
+       p.generated_code
+     FROM projects p
+     WHERE p.generated_code IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1
+         FROM project_versions v
+         WHERE v.project_id = p.id
+       )`
+  );
+  console.log('Migration applied: existing project versions backfilled.');
+
   await connection.execute(
     `CREATE TABLE IF NOT EXISTS ai_model_settings (
       model_id   VARCHAR(50) PRIMARY KEY,

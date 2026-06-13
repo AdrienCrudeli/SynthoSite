@@ -76,6 +76,7 @@ describe('Admin routes', () => {
         title: 'Portfolio',
         description: 'A personal website.',
         site_type: 'portfolio',
+        is_public: 1,
         created_at: '2026-06-01 10:00:00',
         updated_at: '2026-06-01 11:00:00'
       }
@@ -95,10 +96,52 @@ describe('Admin routes', () => {
         title: 'Portfolio',
         description: 'A personal website.',
         siteType: 'portfolio',
+        isPublic: true,
+        viewCount: 0,
+        likeCount: 0,
         createdAt: '2026-06-01 10:00:00',
         updatedAt: '2026-06-01 11:00:00'
       }
     ]);
+  });
+
+  test('GET /api/admin/projects/:id returns generated code for any project', async () => {
+    db.query.mockResolvedValueOnce([
+      {
+        id: 10,
+        user_id: 4,
+        owner_username: 'student',
+        owner_email: 'student@example.com',
+        title: 'Portfolio',
+        description: 'A personal website.',
+        site_type: 'portfolio',
+        prompt: 'Create a portfolio website.',
+        model_used: 'gemini-flash',
+        is_public: 0,
+        style_options: '{"primaryColor":"#14B8A6"}',
+        generated_code: '<!doctype html><html><body>portfolio</body></html>',
+        created_at: '2026-06-01 10:00:00',
+        updated_at: '2026-06-01 11:00:00'
+      }
+    ]);
+
+    const response = await request(app)
+      .get('/api/admin/projects/10')
+      .set('Authorization', `Bearer ${createToken({ id: 1, role: 'admin' })}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.project).toMatchObject({
+      id: 10,
+      userId: 4,
+      ownerUsername: 'student',
+      title: 'Portfolio',
+      isPublic: false,
+      modelUsed: 'gemini-flash',
+      generatedCode: '<!doctype html><html><body>portfolio</body></html>',
+      styleOptions: {
+        primaryColor: '#14B8A6'
+      }
+    });
   });
 
   test('GET /api/admin/models returns model status and usage for an admin', async () => {

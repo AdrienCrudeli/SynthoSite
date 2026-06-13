@@ -13,6 +13,7 @@ import {
   Spinner,
   Table
 } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
@@ -378,8 +379,20 @@ export default function Admin() {
                           <Badge className="type-badge text-capitalize">
                             {item.siteType || 'website'}
                           </Badge>
+                          <Badge bg={item.isPublic ? 'success' : 'secondary'} className="ms-2">
+                            {item.isPublic ? 'Public' : 'Private'}
+                          </Badge>
                         </td>
                         <td className="text-end">
+                          <Button
+                            as={Link}
+                            to={`/admin/projects/${item.id}`}
+                            size="sm"
+                            variant="outline-accent"
+                            className="me-2"
+                          >
+                            Open
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline-danger"
