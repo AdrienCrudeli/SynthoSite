@@ -23,18 +23,20 @@ describe('AI usage service', () => {
     );
   });
 
-  test('returns today usage grouped by model', async () => {
+  test('returns today usage grouped by model from project api calls', async () => {
     db.query.mockResolvedValueOnce([
       { model_id: 'gemini-flash', used_today: 2 },
-      { model_id: 'groq-llama', used_today: 1 }
+      { model_id: 'groq-llama', used_today: 6 }
     ]);
 
     const usage = await getAiUsageByModel();
 
     expect(usage).toEqual(new Map([
       ['gemini-flash', 2],
-      ['groq-llama', 1]
+      ['groq-llama', 6]
     ]));
+    expect(db.query.mock.calls[0][0]).toContain('SUM(COALESCE(api_calls, 1))');
+    expect(db.query.mock.calls[0][0]).toContain('FROM projects');
   });
 
   test('falls back to an empty usage map before the migration is applied', async () => {

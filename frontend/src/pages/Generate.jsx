@@ -47,6 +47,21 @@ const SURPRISE_PROMPTS = [
   }
 ];
 
+const SINGLE_GENERATION_STEPS = [
+  'Analyzing your request...',
+  'Generating the website...',
+  'Injecting matching images...',
+  'Saving the project...'
+];
+
+const MULTIPAGE_GENERATION_STEPS = [
+  'Generating the site plan...',
+  'Page 1 / 4: building the home page...',
+  'Page 2 / 4: expanding the inner pages...',
+  'Page 3 / 4: adding details and imagery...',
+  'Page 4 / 4: assembling navigation and saving...'
+];
+
 export default function Generate() {
   const [formData, setFormData] = useState({
     title: '',
@@ -61,6 +76,8 @@ export default function Generate() {
   const [models, setModels] = useState([]);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activeGenerationMode, setActiveGenerationMode] = useState('single');
+  const [generationStepIndex, setGenerationStepIndex] = useState(0);
   const [usageRefreshKey, setUsageRefreshKey] = useState(0);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -128,6 +145,26 @@ export default function Generate() {
     });
   }, [models, formData.mode]);
 
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenerationStepIndex(0);
+      return undefined;
+    }
+
+    const steps = activeGenerationMode === 'multipage'
+      ? MULTIPAGE_GENERATION_STEPS
+      : SINGLE_GENERATION_STEPS;
+
+    setGenerationStepIndex(0);
+    const intervalId = window.setInterval(() => {
+      setGenerationStepIndex((current) => Math.min(current + 1, steps.length - 1));
+    }, activeGenerationMode === 'multipage' ? 14000 : 6000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isGenerating, activeGenerationMode]);
+
   function updateField(event) {
     setFormData((current) => ({
       ...current,
@@ -137,6 +174,7 @@ export default function Generate() {
 
   async function generateWebsite(nextFormData) {
     setError('');
+    setActiveGenerationMode(nextFormData.mode);
     setIsGenerating(true);
 
     try {
@@ -189,6 +227,10 @@ export default function Generate() {
   ));
   const selectedModel = selectableModels.find((model) => model.id === formData.model);
   const canGenerate = !isGenerating && !isLoadingModels && Boolean(selectedModel) && selectedModel.available !== false;
+  const generationSteps = activeGenerationMode === 'multipage'
+    ? MULTIPAGE_GENERATION_STEPS
+    : SINGLE_GENERATION_STEPS;
+  const generationStatus = generationSteps[generationStepIndex] || generationSteps[0];
 
   return (
     <Container className="page-section">
@@ -400,10 +442,11 @@ export default function Generate() {
               </div>
               {isGenerating && (
                 <div className="generation-flow mt-4" aria-live="polite">
+                  <p className="fw-semibold mb-3">{generationStatus}</p>
                   {[
-                    ['Analyze', Sparkles],
-                    ['Generate', WandSparkles],
-                    ['Save', Database],
+                    [activeGenerationMode === 'multipage' ? 'Plan' : 'Analyze', Sparkles],
+                    [activeGenerationMode === 'multipage' ? 'Pages' : 'Generate', WandSparkles],
+                    ['Images', Database],
                     ['Ready', CheckCircle2]
                   ].map(([label, Icon], index) => (
                     <div className="generation-flow-step" style={{ animationDelay: `${index * 220}ms` }} key={label}>

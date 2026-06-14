@@ -68,6 +68,20 @@ async function main() {
     console.log('Migration skipped: projects.like_count already exists.');
   }
 
+  const [apiCallsColumns] = await connection.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'projects' AND COLUMN_NAME = 'api_calls'`,
+    [process.env.DB_NAME]
+  );
+
+  if (apiCallsColumns.length === 0) {
+    await connection.execute('ALTER TABLE projects ADD COLUMN api_calls INT NOT NULL DEFAULT 1 AFTER like_count');
+    console.log('Migration applied: projects.api_calls added.');
+  } else {
+    console.log('Migration skipped: projects.api_calls already exists.');
+  }
+
   await connection.execute(
     `CREATE TABLE IF NOT EXISTS project_likes (
       id         BIGINT AUTO_INCREMENT PRIMARY KEY,

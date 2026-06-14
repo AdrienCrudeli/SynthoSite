@@ -8,6 +8,7 @@ const projectsRoutes = require('./routes/projects.routes');
 const adminRoutes = require('./routes/admin.routes');
 const modelsRoutes = require('./routes/models.routes');
 const publicRoutes = require('./routes/public.routes');
+const db = require('./config/db');
 const { AppError, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -44,12 +45,21 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
-function healthCheck(req, res) {
+async function healthCheck(req, res) {
+  try {
+    await db.query('SELECT 1');
+    return res.status(200).json({ status: 'ok' });
+  } catch (error) {
+    return res.status(503).json({ status: 'db_unreachable' });
+  }
+}
+
+function apiHealthCheck(req, res) {
   res.json({ status: 'ok', service: 'SynthoSite API' });
 }
 
 app.get('/health', healthCheck);
-app.get('/api/health', healthCheck);
+app.get('/api/health', apiHealthCheck);
 
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/projects', projectsRoutes);

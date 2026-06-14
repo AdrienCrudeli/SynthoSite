@@ -87,7 +87,8 @@ describe('Project routes', () => {
   test('POST /api/projects/generate stores image-injected HTML', async () => {
     aiService.generateSite.mockResolvedValueOnce({
       code: '<!doctype html><html><body><img data-query="red ford mustang sports car" alt="Ford Mustang" width="1200" height="600" /></body></html>',
-      modelUsed: 'gemini-flash'
+      modelUsed: 'gemini-flash',
+      apiCalls: 1
     });
     imageService.injectImages.mockResolvedValueOnce(
       '<!doctype html><html><body><img src="https://images.pexels.com/photos/mustang.jpeg" alt="Ford Mustang" width="1200" height="600" /></body></html>'
@@ -139,12 +140,14 @@ describe('Project routes', () => {
     );
     expect(usageService.recordAiUsage).toHaveBeenCalledWith('gemini-flash', 'generation');
     expect(db.query.mock.calls[3][1][6]).toBe(1);
-    expect(db.query.mock.calls[3][1][8]).toBe(
+    expect(db.query.mock.calls[3][1][7]).toBe(1);
+    expect(db.query.mock.calls[3][1][9]).toBe(
       '<!doctype html><html><body><img src="https://images.pexels.com/photos/mustang.jpeg" alt="Ford Mustang" width="1200" height="600" /></body></html>'
     );
     expect(db.query.mock.calls[5][0]).toContain('INSERT INTO project_versions');
     expect(response.body.project.generatedCode).toContain('https://images.pexels.com/photos/mustang.jpeg');
     expect(response.body.project.isPublic).toBe(true);
+    expect(response.body.project.apiCalls).toBe(1);
   });
 
   test('POST /api/projects/generate rejects disabled models', async () => {
@@ -216,7 +219,8 @@ describe('Project routes', () => {
   test('POST /api/projects/generate sends multi-page mode only to compatible fallback models', async () => {
     aiService.generateSite.mockResolvedValueOnce({
       code: '<!doctype html><html><body><section id="page-home">Restaurant</section></body></html>',
-      modelUsed: 'groq-llama'
+      modelUsed: 'groq-llama',
+      apiCalls: 4
     });
     imageService.injectImages.mockResolvedValueOnce(
       '<!doctype html><html><body><section id="page-home">Restaurant</section></body></html>'
@@ -254,6 +258,8 @@ describe('Project routes', () => {
         mode: 'multipage'
       }
     );
+    expect(db.query.mock.calls[3][1][7]).toBe(4);
+    expect(response.body.project.apiCalls).toBe(4);
   });
 
   test('POST /api/projects/:id/revise updates generated HTML for the owner', async () => {

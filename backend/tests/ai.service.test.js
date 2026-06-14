@@ -61,8 +61,90 @@ describe('AI service provider fallback', () => {
     expect(systemPrompt).not.toContain('picsum');
   });
 
-  test('uses the multi-page prompt and larger token budget when requested', async () => {
-    mockCreate.mockResolvedValueOnce({
+  test('generates multi-page sites through a plan plus one request per page', async () => {
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: `\`\`\`json
+{
+  "pages": [
+    { "id": "home", "label": "Home", "brief": "Hero, story, featured dishes" },
+    { "id": "menu", "label": "Menu", "brief": "Detailed menu sections and specials" },
+    { "id": "contact", "label": "Contact", "brief": "Hours, booking form and location" }
+  ],
+  "headerHtml": "<header><nav><a href=\\"#\\" data-page=\\"home\\">Home</a><a href=\\"#\\" data-page=\\"menu\\">Menu</a><a href=\\"#\\" data-page=\\"contact\\">Contact</a></nav></header>",
+  "footerHtml": "<footer><a href=\\"https://www.pexels.com\\">Photos provided by Pexels</a></footer>"
+}
+\`\`\``
+            }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: '<section id="page-home"><h1>Home</h1></section>'
+            }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: '<section id="page-menu"><h1>Menu</h1></section>'
+            }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: '<section id="page-contact"><h1>Contact</h1></section>'
+            }
+          }
+        ]
+      });
+
+    const result = await generateSite('Build a multi-page restaurant website', {}, 'groq-llama', {
+      mode: 'multipage'
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(4);
+    expect(mockCreate.mock.calls[0][0].model).toBe('llama-3.3-70b-versatile');
+    expect(mockCreate.mock.calls[0][0].max_tokens).toBe(4000);
+    expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('objet JSON valide');
+    expect(mockCreate.mock.calls[1][0].max_tokens).toBe(8000);
+    expect(mockCreate.mock.calls[1][0].messages[0].content).toContain('Header du site');
+    expect(mockCreate.mock.calls[1][0].messages[0].content).toContain('Brief : Hero, story, featured dishes');
+    expect(result).toMatchObject({
+      modelUsed: 'groq-llama',
+      apiCalls: 4
+    });
+    expect(result.code).toContain('<script src="https://cdn.tailwindcss.com"></script>');
+    expect(result.code).toContain('<section id="page-home">');
+    expect(result.code).toContain('<section id="page-menu">');
+    expect(result.code).toContain('<section id="page-contact">');
+    expect(result.code).toContain('Photos provided by Pexels');
+    expect(result.code).toContain("show('home');");
+  });
+
+  test('falls back to the one-shot multi-page prompt when the plan JSON is malformed', async () => {
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: 'not valid json'
+            }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
       choices: [
         {
           message: {
@@ -70,19 +152,86 @@ describe('AI service provider fallback', () => {
           }
         }
       ]
-    });
+      });
 
-    await generateSite('Build a multi-page restaurant website', {}, 'groq-llama', {
+    const result = await generateSite('Build a multi-page restaurant website', {}, 'groq-llama', {
       mode: 'multipage'
     });
 
-    const request = mockCreate.mock.calls[0][0];
-    expect(request.model).toBe('llama-3.3-70b-versatile');
-    expect(request.max_tokens).toBe(16000);
-    expect(request.messages[0].content).toContain('PLUSIEURS pages');
-    expect(request.messages[0].content).toContain('id="page-home"');
-    expect(request.messages[0].content).toContain("show('home');");
-    expect(request.messages[0].content).toContain('Utilise au maximum 5 à 6 images');
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate.mock.calls[1][0].messages[0].content).toContain('PLUSIEURS pages');
+    expect(mockCreate.mock.calls[1][0].max_tokens).toBe(16000);
+    expect(result).toEqual({
+      code: '<!doctype html><html><body><section id="page-home">ok</section></body></html>',
+      modelUsed: 'groq-llama',
+      apiCalls: 2
+    });
+  });
+
+  test('continues remaining multi-page calls on the fallback model after a 429', async () => {
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                pages: [
+                  { id: 'home', label: 'Home', brief: 'Hero and highlights' },
+                  { id: 'services', label: 'Services', brief: 'Detailed services' },
+                  { id: 'contact', label: 'Contact', brief: 'Contact form' }
+                ],
+                headerHtml: '<header><a href="#" data-page="home">Home</a><a href="#" data-page="services">Services</a><a href="#" data-page="contact">Contact</a></header>',
+                footerHtml: '<footer><a href="https://www.pexels.com">Photos provided by Pexels</a></footer>'
+              })
+            }
+          }
+        ]
+      })
+      .mockRejectedValueOnce({ status: 429 })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: '<section id="page-home"><h1>Home</h1></section>'
+            }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: '<section id="page-services"><h1>Services</h1></section>'
+            }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: '<section id="page-contact"><h1>Contact</h1></section>'
+            }
+          }
+        ]
+      });
+
+    const result = await generateSite('Build a multi-page service website', {}, 'groq-llama', {
+      mode: 'multipage'
+    });
+
+    expect(mockCreate.mock.calls.map((call) => call[0].model)).toEqual([
+      'llama-3.3-70b-versatile',
+      'llama-3.3-70b-versatile',
+      'gpt-oss-120b',
+      'gpt-oss-120b',
+      'gpt-oss-120b'
+    ]);
+    expect(modelSettings.autoDisableModel).toHaveBeenCalledWith('groq-llama');
+    expect(result).toMatchObject({
+      modelUsed: 'cerebras-llama',
+      apiCalls: 5
+    });
   });
 
   test('sends the current HTML and requested change when revising a site', async () => {
@@ -110,7 +259,8 @@ describe('AI service provider fallback', () => {
     expect(userPrompt).toContain('Make the header darker');
     expect(result).toEqual({
       code: '<!doctype html><html><body>updated</body></html>',
-      modelUsed: 'gemini-flash'
+      modelUsed: 'gemini-flash',
+      apiCalls: 1
     });
   });
 
@@ -131,7 +281,8 @@ describe('AI service provider fallback', () => {
 
     expect(result).toEqual({
       code: '<!doctype html><html><body>ok</body></html>',
-      modelUsed: 'groq-llama'
+      modelUsed: 'groq-llama',
+      apiCalls: 2
     });
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(mockCreate.mock.calls[0][0].model).toBe('gemini-2.5-flash');
@@ -167,7 +318,8 @@ describe('AI service provider fallback', () => {
 
     expect(result).toEqual({
       code: '<!doctype html><html><body>available</body></html>',
-      modelUsed: 'groq-llama'
+      modelUsed: 'groq-llama',
+      apiCalls: 2
     });
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(mockCreate.mock.calls[0][0].model).toBe('gemini-2.5-flash');

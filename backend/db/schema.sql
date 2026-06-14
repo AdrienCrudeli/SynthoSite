@@ -18,6 +18,7 @@ CREATE TABLE projects (
   is_public      TINYINT(1) NOT NULL DEFAULT 0,
   view_count     INT NOT NULL DEFAULT 0,
   like_count     INT NOT NULL DEFAULT 0,
+  api_calls      INT NOT NULL DEFAULT 1,
   style_options  JSON,
   generated_code LONGTEXT,
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -1,0 +1,1 @@
+ALTER TABLE projects ADD COLUMN api_calls INT NOT NULL DEFAULT 1 AFTER like_count;

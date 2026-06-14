@@ -36,6 +36,7 @@ function serializeProject(row) {
     is_public: Boolean(row.is_public),
     viewCount: Number(row.view_count || 0),
     likeCount: Number(row.like_count || 0),
+    apiCalls: Number(row.api_calls || 1),
     styleOptions: parseStyleOptions(row.style_options),
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -100,7 +101,7 @@ async function listProjects(req, res, next) {
     const sort = req.query.sort || 'recent';
     const searchLike = search ? `%${search}%` : null;
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, style_options, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, api_calls, style_options, created_at, updated_at
        FROM projects
        WHERE user_id = ?
          AND (? IS NULL OR title LIKE ? OR description LIKE ?)
@@ -135,7 +136,7 @@ async function listProjects(req, res, next) {
 async function getProject(req, res, next) {
   try {
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, api_calls, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
@@ -184,7 +185,7 @@ async function generateProject(req, res, next) {
     }
 
     const prompt = buildGenerationPrompt({ title, description, siteType, styleOptions });
-    const { code, modelUsed } = await aiService.generateSite(prompt, styleOptions, model, {
+    const { code, modelUsed, apiCalls = 1 } = await aiService.generateSite(prompt, styleOptions, model, {
       allowedModelIds: enabledModelIds,
       mode
     });
@@ -192,8 +193,8 @@ async function generateProject(req, res, next) {
     await recordAiUsage(modelUsed, 'generation');
     const result = await db.query(
       `INSERT INTO projects
-        (user_id, title, description, site_type, prompt, model_used, is_public, style_options, generated_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, title, description, site_type, prompt, model_used, is_public, api_calls, style_options, generated_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         title,
@@ -202,6 +203,7 @@ async function generateProject(req, res, next) {
         prompt,
         modelUsed,
         shouldPublish ? 1 : 0,
+        apiCalls,
         JSON.stringify(styleOptions),
         generatedCode
       ]
@@ -228,6 +230,7 @@ async function generateProject(req, res, next) {
         is_public: shouldPublish,
         viewCount: 0,
         likeCount: 0,
+        apiCalls,
         styleOptions,
         generatedCode
       }
@@ -250,7 +253,7 @@ async function updateProject(req, res, next) {
     }
 
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, api_calls, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
@@ -269,7 +272,7 @@ async function reviseProject(req, res, next) {
   try {
     const { modification } = req.body;
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, api_calls, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
@@ -312,7 +315,7 @@ async function reviseProject(req, res, next) {
     );
 
     const updatedRows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, api_calls, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
@@ -340,7 +343,7 @@ async function updateVisibility(req, res, next) {
     }
 
     const rows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, api_calls, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
@@ -408,7 +411,7 @@ async function restoreProjectVersion(req, res, next) {
     );
 
     const updatedRows = await db.query(
-      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, style_options, generated_code, created_at, updated_at
+      `SELECT id, user_id, title, description, site_type, prompt, model_used, is_public, view_count, like_count, api_calls, style_options, generated_code, created_at, updated_at
        FROM projects
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
