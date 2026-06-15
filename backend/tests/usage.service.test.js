@@ -15,24 +15,20 @@ describe('AI usage service', () => {
   test('records a successful AI request', async () => {
     db.query.mockResolvedValueOnce({ insertId: 1 });
 
-    await recordAiUsage('gemini-flash', 'generation');
+    await recordAiUsage('gemini-flash', 'generation', 4);
 
     expect(db.query).toHaveBeenCalledWith(
-      'INSERT INTO ai_usage (model_id, request_type) VALUES (?, ?)',
-      ['gemini-flash', 'generation']
+      'INSERT INTO ai_usage (model_id, request_type, api_calls) VALUES (?, ?, ?)',
+      ['gemini-flash', 'generation', 4]
     );
   });
 
-  test('returns today usage grouped by model from project api calls', async () => {
-    db.query
-      .mockResolvedValueOnce([
-        { model_id: 'gemini-flash', used_today: 1 },
-        { model_id: 'groq-llama', used_today: 6 }
-      ])
-      .mockResolvedValueOnce([
-        { model_id: 'gemini-flash', used_today: 1 },
-        { model_id: 'cerebras-llama', used_today: 1 }
-      ]);
+  test('returns today usage grouped by model from immutable ai usage rows', async () => {
+    db.query.mockResolvedValueOnce([
+      { model_id: 'gemini-flash', used_today: 2 },
+      { model_id: 'groq-llama', used_today: 6 },
+      { model_id: 'cerebras-llama', used_today: 1 }
+    ]);
 
     const usage = await getAiUsageByModel();
 
@@ -42,8 +38,7 @@ describe('AI usage service', () => {
       ['cerebras-llama', 1]
     ]));
     expect(db.query.mock.calls[0][0]).toContain('SUM(COALESCE(api_calls, 1))');
-    expect(db.query.mock.calls[0][0]).toContain('FROM projects');
-    expect(db.query.mock.calls[1][0]).toContain("request_type = 'revision'");
+    expect(db.query.mock.calls[0][0]).toContain('FROM ai_usage');
   });
 
   test('falls back to an empty usage map before the migration is applied', async () => {
@@ -52,12 +47,12 @@ describe('AI usage service', () => {
     await expect(getAiUsageByModel()).resolves.toEqual(new Map());
   });
 
-  test('keeps project usage when the revision counter table is unavailable', async () => {
+  test('falls back to legacy row counts when ai_usage.api_calls is not migrated yet', async () => {
     db.query
+      .mockRejectedValueOnce({ code: 'ER_BAD_FIELD_ERROR' })
       .mockResolvedValueOnce([
         { model_id: 'groq-llama', used_today: 4 }
-      ])
-      .mockRejectedValueOnce({ code: 'ER_NO_SUCH_TABLE' });
+      ]);
 
     await expect(getAiUsageByModel()).resolves.toEqual(new Map([
       ['groq-llama', 4]

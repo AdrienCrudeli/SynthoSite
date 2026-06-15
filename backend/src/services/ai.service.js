@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const cheerio = require('cheerio');
 const { AI_PROVIDERS, FALLBACK_ORDER } = require('../config/aiProviders');
 const { AppError } = require('../middleware/errorHandler');
 const modelSettings = require('./modelSettings.service');
@@ -144,12 +145,28 @@ function parsePlanJson(content) {
 
     return {
       pages,
-      headerHtml: parsed.headerHtml.trim(),
-      footerHtml: parsed.footerHtml.trim()
+      headerHtml: normalizeShellHtml(parsed.headerHtml, 'header'),
+      footerHtml: normalizeShellHtml(parsed.footerHtml, 'footer')
     };
   } catch (error) {
     return null;
   }
+}
+
+function normalizeShellHtml(html, selector) {
+  const content = String(html || '').trim();
+  const $ = cheerio.load(content, null, false);
+  const element = $(selector).first();
+
+  return element.length > 0 ? $.html(element) : content;
+}
+
+function removeGeneratedShellNoise($) {
+  $('script, header, footer').remove();
+  $('nav').filter((index, el) => {
+    const nav = $(el);
+    return nav.find('[data-page]').length > 0 || nav.find('a[href="#"]').length > 1;
+  }).remove();
 }
 
 function buildPageSystemPrompt(page, plan, styleOptions = {}) {
@@ -171,6 +188,8 @@ Contenu :
 - Produis un contenu RICHE et COMPLET : plusieurs sous-sections, du texte réaliste et fourni, des
   éléments pertinents selon la page (listes, cartes, grilles, formulaire factice pour Contact, etc.).
   Profite de tout l'espace — c'est l'intérêt de générer chaque page séparément.
+- Ne génère JAMAIS de <header>, <nav> global, <footer>, <html>, <head>, <body> ni <script>.
+  Le header, le footer et le script de navigation seront ajoutés automatiquement par le serveur.
 - Utilise au maximum 5 à 6 images sur l'ensemble du site, donc 0 à 2 images sur cette page selon sa pertinence.
 - Pour CHAQUE image, n'écris ni URL ni src : <img data-query="mots-clés anglais" alt="..." width="..." height="..." />.
 - Style via classes Tailwind cohérentes avec le header et le reste du site.`;
@@ -178,12 +197,23 @@ Contenu :
 
 function ensurePageSection(html, pageId) {
   const content = cleanGeneratedHtml(html);
+  const $ = cheerio.load(content, null, false);
+  const section = $(`section#page-${pageId}`).first();
 
-  if (new RegExp(`<section\\b[^>]*id=["']page-${pageId}["']`, 'i').test(content)) {
-    return content;
+  if (section.length > 0) {
+    section.find('script, header, footer').remove();
+    section.find('nav').filter((index, el) => {
+      const nav = $(el);
+      return nav.find('[data-page]').length > 0 || nav.find('a[href="#"]').length > 1;
+    }).remove();
+    return $.html(section);
   }
 
-  return `<section id="page-${pageId}" class="min-h-screen py-16">${content}</section>`;
+  removeGeneratedShellNoise($);
+  const body = $('body');
+  const cleanedContent = (body.length > 0 ? body.html() : $.root().html())?.trim() || '';
+
+  return `<section id="page-${pageId}" class="min-h-screen py-16">${cleanedContent}</section>`;
 }
 
 function assembleMultiPageHtml(plan, pageSections) {

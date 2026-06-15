@@ -86,7 +86,7 @@ describe('AI service provider fallback', () => {
         choices: [
           {
             message: {
-              content: '<section id="page-home"><h1>Home</h1></section>'
+              content: '<header>Duplicate Home Header</header><section id="page-home"><h1>Home</h1></section><footer>Duplicate Home Footer</footer>'
             }
           }
         ]
@@ -95,7 +95,7 @@ describe('AI service provider fallback', () => {
         choices: [
           {
             message: {
-              content: '<section id="page-menu"><h1>Menu</h1></section>'
+              content: '<!doctype html><html><body><header>Duplicate Menu Header</header><section id="page-menu"><h1>Menu</h1></section></body></html>'
             }
           }
         ]
@@ -104,7 +104,7 @@ describe('AI service provider fallback', () => {
         choices: [
           {
             message: {
-              content: '<section id="page-contact"><h1>Contact</h1></section>'
+              content: '<section id="page-contact"><header>Duplicate Contact Header</header><h1>Contact</h1></section>'
             }
           }
         ]
@@ -131,6 +131,10 @@ describe('AI service provider fallback', () => {
     expect(result.code).toContain('<section id="page-contact">');
     expect(result.code).toContain('Photos provided by Pexels');
     expect(result.code).toContain("show('home');");
+    expect(result.code).not.toContain('Duplicate Home Header');
+    expect(result.code).not.toContain('Duplicate Home Footer');
+    expect(result.code).not.toContain('Duplicate Menu Header');
+    expect(result.code).not.toContain('Duplicate Contact Header');
   });
 
   test('falls back to the one-shot multi-page prompt when the plan JSON is malformed', async () => {

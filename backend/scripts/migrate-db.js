@@ -171,12 +171,27 @@ async function main() {
       id           BIGINT AUTO_INCREMENT PRIMARY KEY,
       model_id     VARCHAR(50) NOT NULL,
       request_type ENUM('generation','revision') NOT NULL DEFAULT 'generation',
+      api_calls    INT NOT NULL DEFAULT 1,
       created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_ai_usage_created_at (created_at),
       INDEX idx_ai_usage_model (model_id)
     )`
   );
   console.log('Migration applied: ai_usage table ensured.');
+
+  const [aiUsageApiCallsColumns] = await connection.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'ai_usage' AND COLUMN_NAME = 'api_calls'`,
+    [process.env.DB_NAME]
+  );
+
+  if (aiUsageApiCallsColumns.length === 0) {
+    await connection.execute('ALTER TABLE ai_usage ADD COLUMN api_calls INT NOT NULL DEFAULT 1 AFTER request_type');
+    console.log('Migration applied: ai_usage.api_calls added.');
+  } else {
+    console.log('Migration skipped: ai_usage.api_calls already exists.');
+  }
 
   await connection.execute(
     `CREATE TABLE IF NOT EXISTS pexels_usage (

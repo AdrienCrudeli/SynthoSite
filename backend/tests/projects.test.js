@@ -138,7 +138,7 @@ describe('Project routes', () => {
     expect(imageService.injectImages).toHaveBeenCalledWith(
       '<!doctype html><html><body><img data-query="red ford mustang sports car" alt="Ford Mustang" width="1200" height="600" /></body></html>'
     );
-    expect(usageService.recordAiUsage).toHaveBeenCalledWith('gemini-flash', 'generation');
+    expect(usageService.recordAiUsage).toHaveBeenCalledWith('gemini-flash', 'generation', 1);
     expect(db.query.mock.calls[3][1][6]).toBe(1);
     expect(db.query.mock.calls[3][1][7]).toBe(1);
     expect(db.query.mock.calls[3][1][9]).toBe(
@@ -259,6 +259,7 @@ describe('Project routes', () => {
         mode: 'multipage'
       }
     );
+    expect(usageService.recordAiUsage).toHaveBeenCalledWith('groq-llama', 'generation', 4);
     expect(db.query.mock.calls[3][1][7]).toBe(4);
     expect(response.body.project.apiCalls).toBe(4);
   });

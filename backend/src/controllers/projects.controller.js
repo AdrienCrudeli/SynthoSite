@@ -190,7 +190,7 @@ async function generateProject(req, res, next) {
       mode
     });
     const generatedCode = await injectImages(code);
-    await recordAiUsage(modelUsed, 'generation');
+    await recordAiUsage(modelUsed, 'generation', apiCalls);
     const result = await db.query(
       `INSERT INTO projects
         (user_id, title, description, site_type, prompt, model_used, is_public, api_calls, style_options, generated_code)
