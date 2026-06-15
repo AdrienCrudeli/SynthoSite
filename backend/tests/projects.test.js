@@ -211,7 +211,7 @@ describe('Project routes', () => {
       });
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toBe('Multi-page generation is available only with Groq and Cerebras models.');
+    expect(response.body.message).toBe('Multi-page generation is available only with Groq, Gemini Flash-Lite and Cerebras models.');
     expect(db.query).not.toHaveBeenCalled();
     expect(aiService.generateSite).not.toHaveBeenCalled();
   });
@@ -253,6 +253,7 @@ describe('Project routes', () => {
       {
         allowedModelIds: [
           'groq-llama',
+          'gemini-flash-lite',
           'cerebras-llama'
         ],
         mode: 'multipage'

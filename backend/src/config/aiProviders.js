@@ -13,7 +13,8 @@ const AI_PROVIDERS = {
     apiKeyEnv: 'GEMINI_API_KEY',
     legacyApiKeyEnv: 'AI_API_KEY',
     model: 'gemini-2.5-flash-lite',
-    dailyLimit: 1000
+    dailyLimit: 1000,
+    supportsMultiPage: true
   },
   'groq-llama': {
     label: 'Groq Llama 3.3 70B',

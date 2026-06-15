@@ -24,6 +24,8 @@ async function recordAiUsage(modelId, requestType = 'generation') {
 }
 
 async function getAiUsageByModel() {
+  const usage = new Map();
+
   try {
     const rows = await db.query(
       `SELECT model_used AS model_id, SUM(COALESCE(api_calls, 1)) AS used_today
@@ -33,16 +35,37 @@ async function getAiUsageByModel() {
        GROUP BY model_used`
     );
 
-    return new Map(
-      rows.map((row) => [row.model_id, Number(row.used_today || 0)])
-    );
+    rows.forEach((row) => {
+      usage.set(row.model_id, Number(row.used_today || 0));
+    });
   } catch (error) {
     if (isMissingUsageTableError(error) || isMissingProjectsApiCallsColumnError(error)) {
-      return new Map();
+      return usage;
     }
 
     throw error;
   }
+
+  try {
+    const revisionRows = await db.query(
+      `SELECT model_id, COUNT(*) AS used_today
+       FROM ai_usage
+       WHERE request_type = 'revision'
+         AND DATE(created_at) = CURDATE()
+       GROUP BY model_id`
+    );
+
+    revisionRows.forEach((row) => {
+      const current = usage.get(row.model_id) || 0;
+      usage.set(row.model_id, current + Number(row.used_today || 0));
+    });
+  } catch (error) {
+    if (!isMissingUsageTableError(error)) {
+      throw error;
+    }
+  }
+
+  return usage;
 }
 
 module.exports = {

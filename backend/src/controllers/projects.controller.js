@@ -165,7 +165,7 @@ async function generateProject(req, res, next) {
     }
 
     if (mode === 'multipage' && !AI_PROVIDERS[model].supportsMultiPage) {
-      throw new AppError('Multi-page generation is available only with Groq and Cerebras models.', 400);
+      throw new AppError('Multi-page generation is available only with Groq, Gemini Flash-Lite and Cerebras models.', 400);
     }
 
     if (!(await modelSettings.isModelEnabled(model))) {

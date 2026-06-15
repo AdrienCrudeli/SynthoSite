@@ -56,6 +56,14 @@ describe('Model routes', () => {
         supportsMultiPage: true
       }),
       expect.objectContaining({
+        id: 'gemini-flash-lite',
+        label: 'Gemini 2.5 Flash-Lite',
+        enabled: true,
+        available: true,
+        status: 'available',
+        supportsMultiPage: true
+      }),
+      expect.objectContaining({
         id: 'mistral-large',
         label: 'Mistral Large',
         enabled: false,

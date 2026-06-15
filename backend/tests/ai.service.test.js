@@ -223,13 +223,13 @@ describe('AI service provider fallback', () => {
     expect(mockCreate.mock.calls.map((call) => call[0].model)).toEqual([
       'llama-3.3-70b-versatile',
       'llama-3.3-70b-versatile',
-      'gpt-oss-120b',
-      'gpt-oss-120b',
-      'gpt-oss-120b'
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash-lite'
     ]);
     expect(modelSettings.autoDisableModel).toHaveBeenCalledWith('groq-llama');
     expect(result).toMatchObject({
-      modelUsed: 'cerebras-llama',
+      modelUsed: 'gemini-flash-lite',
       apiCalls: 5
     });
   });

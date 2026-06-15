@@ -312,7 +312,7 @@ export default function Generate() {
                       </Form.Select>
                       {formData.mode === 'multipage' && (
                         <Form.Text className="muted-copy">
-                          Available with Groq and Cerebras only.
+                          Available with Groq, Gemini Flash-Lite and Cerebras.
                         </Form.Text>
                       )}
                     </Form.Group>
